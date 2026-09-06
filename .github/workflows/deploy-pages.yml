@@ -38,7 +38,7 @@ jobs:
           git -C pages fetch origin gh-pages
           git -C pages checkout -B gh-pages origin/gh-pages
           if [ "$TARGET" = "." ]; then
-            find pages -mindepth 1 -maxdepth 1 ! -name dev -exec rm -rf {} +
+            find pages -mindepth 1 -maxdepth 1 ! -name dev ! -name .git -exec rm -rf {} +
             cp -R dist/. pages/
             echo "alaskerp.javiermeza.dev" > pages/CNAME
           else
