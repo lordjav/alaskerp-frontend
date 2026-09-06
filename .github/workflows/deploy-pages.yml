@@ -45,4 +45,4 @@ jobs:
           fi
           git -C pages add .
           git -C pages -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "Deploy ${GITHUB_SHA}"
-          git -C pages push origin gh-pages
+          git -C pages push origin HEAD:gh-pages
