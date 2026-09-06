@@ -60,7 +60,7 @@ Flujo táctil: seleccionar presentación/tamaño -> elegir sabores permitidos ->
 - Métodos de pago: efectivo, Nequi, Bancolombia, tarjeta de crédito y Otro. Otro exige comentario.
 - La confirmación es obligatoria antes de crear la venta.
 - La solicitud usa una clave de idempotencia para evitar dobles ventas por doble toque o reintento de red.
-- Impresión de ticket y apertura de cajón quedan fuera de alcance.
+- Tiquete con vista previa, impresión automática configurable, reimpresión y apertura del cajón para efectivo mediante conector Windows local.
 
 ### Listado y detalle de ventas
 
@@ -96,7 +96,7 @@ Flujo táctil: seleccionar presentación/tamaño -> elegir sabores permitidos ->
 
 ## Fuera de alcance inicial
 
-- Impresión, integración de caja registradora y `terminal_id`.
+- `terminal_id`.
 - Pagos mixtos, valor recibido y cálculo de cambio.
 - Autoregistro, inicio de sesión por correo, MFA y revocación inmediata de tokens.
 - Soporte móvil como objetivo primario.

@@ -101,3 +101,18 @@ button:disabled:hover, button:disabled:active { transform: none; }
 
 /* On mobile the sidebar becomes a top bar; drop the fixed full-height behavior */
 @media (max-width: 900px) { .side { position: static; height: auto; align-self: auto; overflow: visible; } }
+
+/* Thermal receipt preview: the same fixed-width lines are sent to the printer. */
+.receipt-overlay { z-index:5; }
+.receipt-modal { width:min(900px,100%); max-height:calc(100vh - 48px); overflow:auto; }
+.receipt-modal > .modal-heading { align-items:center; margin-bottom:16px; }
+.receipt-settings-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,1fr); gap:32px; align-items:start; }
+.receipt-form { display:grid; gap:12px; }
+.receipt-paper { width:max-content; max-width:100%; margin:20px auto; padding:24px 14px; background:white; color:#111; font:14px/1.5 "Courier New",monospace; white-space:pre; overflow-x:auto; border:1px solid #ddd; box-shadow:0 8px 20px #0001; }
+.receipt-check { display:flex; gap:12px; align-items:center; min-height:48px; }
+.receipt-check input { width:22px; height:22px; flex-shrink:0; accent-color:#e9167b; }
+.receipt-help { font-size:13px; line-height:1.5; color:#756d5f; }
+.receipt-status { min-height:24px; font-weight:650; overflow-wrap:anywhere; }
+.pos-tools { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+.pos-tools button { font-size:13px; min-height:48px; }
+@media(max-width:700px) { .receipt-settings-grid{grid-template-columns:1fr}.receipt-paper{font-size:12px}.heading{flex-wrap:wrap} }

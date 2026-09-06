@@ -1,0 +1,20 @@
+ALASKA CAJA - INSTALACION
+
+1. Extrae todo el ZIP en una carpeta.
+2. Si ya tienes Alaska Caja, sal desde el icono junto al reloj > Salir del conector.
+3. Ejecuta Instalar.cmd.
+4. Abre Alaska Caja desde Inicio o desde la barra de tareas.
+5. Pulsa Copiar clave para la web y pegala en Tiquetes e impresora del POS.
+
+El programa arranca minimizado al iniciar tu sesion de Windows.
+El boton ABRIR CAJON funciona sin navegador ni internet, con SAT15TUS encendida.
+Cerrar con X minimiza; Salir del conector lo detiene.
+Los cambios nuevos del frontend deben publicarse para aparecer en el sitio web.
+
+Datos persistentes: %LOCALAPPDATA%\AlaskerpPrint\data
+No borres esa carpeta: contiene la clave y el historial para evitar reenvios.
+
+Requisitos: Windows 10/11 de 64 bits y .NET Framework 4.
+Este instalador incluye Python oficial embebido: no necesita internet ni Python global.
+El instalador valida el archivo con el SHA256 de Python.org.
+La licencia de Python esta incluida dentro de python-runtime.zip.

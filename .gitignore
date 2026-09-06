@@ -2,3 +2,7 @@ node_modules/
 dist/
 .env
 .env.local
+__pycache__/
+local-print/.local/
+.pnpm-store/
+work/

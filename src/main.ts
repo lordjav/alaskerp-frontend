@@ -1,3 +1,4 @@
+import { showReceipt, showPrinterSettings, manualDrawer } from "./components/receipts";
 import "./styles/main.css";
 import { api } from "./services/api";
 import { acceptCallback, isAuthenticated, login, logout, roles, username } from "./services/auth";
@@ -11,6 +12,9 @@ let cart: CartItem[] = [];
 let chosenProduct: Product | null = null;
 let chosenFlavors: string[] = [];
 let selectedPayment = "cash";
+let saleBusy = false;
+let pendingSale: { key: string; payload: string } | null = null;
+let lastSale: Sale | null = null;
 let posModal: "products" | "flavors" | "quantity" | null = null;
 
 const labels: Record<Page, string> = { pos: "Registrar venta", sales: "Listado de ventas", metrics: "Métricas", settings: "Configuración" };
@@ -150,7 +154,10 @@ async function renderPos(): Promise<void> {
   const productModal = posModal === "products" ? `<div class="modal-backdrop"><section class="modal pos-modal" role="dialog" aria-modal="true"><div class="modal-heading"><div><p class="step-label">Paso 1 de 3</p><h2>Elige un producto</h2></div><button class="modal-close" data-close-products aria-label="Cerrar">×</button></div><div class="grid product-grid modal-products">${productButtons || "<div class=empty>No hay productos activos.</div>"}</div></section></div>` : "";
   const flavorModal = posModal === "flavors" && chosenProduct ? `<div class="modal-backdrop"><section class="modal pos-modal" role="dialog" aria-modal="true"><div class="modal-heading"><div><p class="step-label">Paso 2 de 3</p><h2>Elige ${chosenProduct.max_flavors} sabor${chosenProduct.max_flavors > 1 ? "es" : ""}</h2><p>${chosenProduct.presentation} · ${chosenProduct.size} · ${money(chosenProduct.price)}</p></div><button class="modal-close" data-close-modal aria-label="Cancelar selección">×</button></div><div class="flavor-progress"><span>${chosenFlavors.length} de ${chosenProduct.max_flavors} seleccionados</span><div><i style="width:${(chosenFlavors.length / chosenProduct.max_flavors) * 100}%"></i></div></div><div class="grid flavors modal-flavors">${flavorButtons}</div><button class="outline modal-cancel" data-close-modal>Cancelar</button></section></div>` : "";
   const quantityModal = posModal === "quantity" && chosenProduct ? `<div class="modal-backdrop"><section class="modal pos-modal quantity-modal" role="dialog" aria-modal="true"><div class="modal-heading"><div><p class="step-label">Paso 3 de 3</p><h2>¿Cuántos deseas?</h2><p>${chosenProduct.presentation} · ${chosenProduct.size} · ${chosenFlavors.join(", ")}</p></div><button class="modal-close" data-close-modal aria-label="Cancelar selección">×</button></div><div class="quantity-control modal-quantity"><button class="quantity-button" data-quantity-delta="-1" aria-label="Disminuir cantidad">−</button><output id="quantity">1</output><button class="quantity-button" data-quantity-delta="1" aria-label="Aumentar cantidad">+</button></div><button class="primary modal-add" id="add-cart">Agregar al carrito · ${money(chosenProduct.price)}</button><button class="outline modal-cancel" data-back-to-flavors>Volver a sabores</button></section></div>` : "";
-  shell(`${title("Registrar venta", "Toca el botón para elegir un producto.")}<div class="pos-screen"><div class="pos"><div class="pos-left"><section class="panel catalog-panel"><div><p class="step-label">Paso 1 de 3</p><h2 class="section-title">Producto</h2><button class="primary catalog-launch" data-open-products>Elegir producto</button></div><div class="catalog-hint">Elige cono o vaso y su tamaño. Después seleccionarás los sabores y la cantidad.</div></section><section class="panel payment-panel"><h2 class="section-title">Método de pago</h2><div class="payment-options">${paymentButtons}</div>${selectedPayment === "other" ? `<label class="field payment-comment">Comentario para Otro<input id="payment-comment" maxlength="300" placeholder="Describe el método de pago"></label>` : ""}</section></div><aside class="panel cart"><h2 class="section-title">Venta actual</h2><div class="cart-items">${cartItems}</div><div class="total"><span>Total</span><span>${money(total)}</span></div><button class="primary checkout-action" id="confirm-sale" ${!cart.length ? "disabled" : ""}>Confirmar venta</button></aside></div></div>${productModal}${flavorModal}${quantityModal}`, "pos");
+  shell(`${title("Registrar venta", "Toca el botón para elegir un producto.")}<div class="pos-screen"><div class="pos"><div class="pos-left"><section class="panel catalog-panel"><div><p class="step-label">Paso 1 de 3</p><h2 class="section-title">Producto</h2><button class="primary catalog-launch" data-open-products>Elegir producto</button></div><div class="pos-tools"><button class="outline" id="printer-settings">Tiquetes e impresora</button><button class="outline" id="open-drawer">Abrir cajón</button><button class="outline" id="last-receipt" ${lastSale ? "" : "disabled"}>Último tiquete</button></div><div class="catalog-hint">Elige cono o vaso y su tamaño. Después seleccionarás los sabores y la cantidad.</div></section><section class="panel payment-panel"><h2 class="section-title">Método de pago</h2><div class="payment-options">${paymentButtons}</div>${selectedPayment === "other" ? `<label class="field payment-comment">Comentario para Otro<input id="payment-comment" maxlength="300" placeholder="Describe el método de pago"></label>` : ""}</section></div><aside class="panel cart"><h2 class="section-title">Venta actual</h2><div class="cart-items">${cartItems}</div><div class="total"><span>Total</span><span>${money(total)}</span></div><button class="primary checkout-action" id="confirm-sale" ${!cart.length ? "disabled" : ""}>Confirmar venta</button></aside></div></div>${productModal}${flavorModal}${quantityModal}`, "pos");
+  document.querySelector<HTMLButtonElement>("#printer-settings")!.onclick = showPrinterSettings;
+  document.querySelector<HTMLButtonElement>("#open-drawer")!.onclick = event => void manualDrawer(event.currentTarget as HTMLButtonElement);
+  document.querySelector<HTMLButtonElement>("#last-receipt")!.onclick = () => { if (lastSale) showReceipt(lastSale, { canPrint: true }); };
   document.querySelector<HTMLButtonElement>("[data-open-products]")?.addEventListener("click", () => { posModal = "products"; renderPos().catch(showError); });
   document.querySelectorAll<HTMLButtonElement>("[data-product]").forEach((button) => button.onclick = () => { chosenProduct = products.find((p) => p.id === button.dataset.product)!; chosenFlavors = []; posModal = "flavors"; renderPos().catch(showError); });
   document.querySelectorAll<HTMLButtonElement>("[data-flavor]").forEach((button) => button.onclick = () => { const flavor = button.dataset.flavor!; if (chosenFlavors.length < (chosenProduct?.max_flavors ?? 0)) chosenFlavors = [...chosenFlavors, flavor]; if (chosenProduct && chosenFlavors.length === chosenProduct.max_flavors) posModal = "quantity"; renderPos().catch(showError); });
@@ -165,17 +172,36 @@ async function renderPos(): Promise<void> {
 }
 
 async function confirmSale(): Promise<void> {
-  const payment = selectedPayment;
-  const paymentComment = document.querySelector<HTMLInputElement>("#payment-comment")?.value.trim() ?? "";
-  if (payment === "other" && !paymentComment) throw new Error("Escribe un comentario para el pago Otro.");
-  if (!await askConfirmation("¿Confirmar venta?", `Registrarás una venta por ${money(cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0))}.`, "Confirmar venta")) return;
-  const key = crypto.randomUUID();
-  await api.createSale({ items: cart.map((item) => ({ product_id: item.product.id, flavors: item.flavors, quantity: item.quantity })), payment_type: payment, payment_comment: paymentComment || undefined }, key);
-  cart = []; await renderPos();
+  if (saleBusy || !cart.length) return;
+  saleBusy = true;
+  let saving: HTMLDivElement | undefined;
+  let registered = false;
+  const button = document.querySelector<HTMLButtonElement>("#confirm-sale");
+  if (button) button.disabled = true;
+  try {
+    const payment = selectedPayment;
+    const paymentComment = document.querySelector<HTMLInputElement>("#payment-comment")?.value.trim() ?? "";
+    if (payment === "other" && !paymentComment) { await notify("Falta el método de pago", "Escribe un comentario para el pago Otro."); return; }
+    const payload = JSON.stringify({ items: cart.map(item => ({ product_id: item.product.id, flavors: item.flavors, quantity: item.quantity })), payment_type: payment, payment_comment: paymentComment || undefined });
+    if (!await askConfirmation("¿Confirmar venta?", `Registrarás una venta por ${money(cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0))}.`, "Confirmar venta")) return;
+    if (!pendingSale || pendingSale.payload !== payload) pendingSale = { key: crypto.randomUUID(), payload };
+    saving = document.createElement("div"); saving.className = "modal-backdrop";
+    saving.innerHTML = '<section class="modal" role="status" aria-live="polite">Registrando venta…</section>';
+    document.body.append(saving);
+    const { sale } = await api.createSale(JSON.parse(payload), pendingSale.key);
+    registered = true;
+    saving.remove(); saving = undefined;
+    lastSale = sale; pendingSale = null; cart = [];
+    await renderPos();
+    showReceipt(sale, { newSale: true, canPrint: true });
+  } catch (error) {
+    saving?.remove(); saving = undefined;
+    await notify(registered ? "Venta registrada; no se pudo mostrar el tiquete" : "No se recibió confirmación de la venta", registered ? "La venta está guardada. Recupera el comprobante desde Último tiquete." : error instanceof Error ? error.message : "Vuelve a intentarlo con el mismo carrito.");
+  } finally { saving?.remove(); saleBusy = false; if (button?.isConnected) button.disabled = !cart.length; }
 }
 
 function salesRows(sales: Sale[]): string {
-  return sales.length ? sales.map((sale) => `<tr class="${sale.status === "cancelled" ? "row-cancelled" : ""}"><td>${new Date(sale.created_at).toLocaleString("es-CO")}</td><td>${capitalize(sale.seller.username)}</td><td>${sale.items.map((item) => `${item.presentation} ${item.size}`).join(", ")}</td><td>${money(sale.total_sale)}</td><td><span class="status ${sale.status === "cancelled" ? "cancelled" : ""}">${sale.status === "cancelled" ? "Anulada" : "Activa"}</span></td><td>${sale.status === "active" && has("sales") && !roles().includes("observer") ? `<button class="outline icon-btn" data-cancel="${sale.created_at}" title="Anular venta" aria-label="Anular venta">×</button>` : ""}</td></tr>`).join("") : `<tr><td colspan="6" class="empty">No hay ventas en el rango seleccionado.</td></tr>`;
+  return sales.length ? sales.map((sale, index) => `<tr class="${sale.status === "cancelled" ? "row-cancelled" : ""}"><td>${new Date(sale.created_at).toLocaleString("es-CO")}</td><td>${capitalize(sale.seller.username)}</td><td>${sale.items.map((item) => `${item.presentation} ${item.size}`).join(", ")}</td><td>${money(sale.total_sale)}</td><td><span class="status ${sale.status === "cancelled" ? "cancelled" : ""}">${sale.status === "cancelled" ? "Anulada" : "Activa"}</span></td><td><button class="outline" data-receipt="${index}">Tiquete</button>${sale.status === "active" && has("sales") && !roles().includes("observer") ? `<button class="outline icon-btn" data-cancel="${sale.created_at}" title="Anular venta" aria-label="Anular venta">×</button>` : ""}</td></tr>`).join("") : `<tr><td colspan="6" class="empty">No hay ventas en el rango seleccionado.</td></tr>`;
 }
 
 function exportSalesCsv(sales: Sale[], from: string, to: string): void {
@@ -204,6 +230,7 @@ function exportSalesCsv(sales: Sale[], from: string, to: string): void {
 
 async function paintSales(sales: Sale[], start: string, end: string): Promise<void> {
   shell(`${title("Listado de ventas", "Consulta hasta 30 días de ventas. Las anuladas permanecen visibles.")}<div class="panel"><div class="actions" style="margin-bottom:18px"><label class="field">Desde<input id="sales-start" type="date" value="${start}"></label><label class="field">Hasta<input id="sales-end" type="date" value="${end}"></label><button class="secondary" id="search-sales">Consultar</button><button class="outline" id="export-sales" ${sales.length ? "" : "disabled"}>Exportar</button></div><table class="table"><thead><tr><th>Fecha</th><th>Vendedor</th><th>Productos</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>${salesRows(sales)}</tbody></table></div>`, "sales");
+  document.querySelectorAll<HTMLButtonElement>("[data-receipt]").forEach(button => button.onclick = () => showReceipt(sales[Number(button.dataset.receipt)], { canPrint: has("pos") }));
   const range = () => ({ from: document.querySelector<HTMLInputElement>("#sales-start")!.value, to: document.querySelector<HTMLInputElement>("#sales-end")!.value });
   document.querySelector<HTMLButtonElement>("#search-sales")?.addEventListener("click", async () => { const { from, to } = range(); if (!from || !to) return; await paintSales(await api.sales(from, to, true), from, to); });
   document.querySelector<HTMLButtonElement>("#export-sales")?.addEventListener("click", () => { const { from, to } = range(); exportSalesCsv(sales, from, to); });
