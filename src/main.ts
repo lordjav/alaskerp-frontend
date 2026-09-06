@@ -26,7 +26,11 @@ function shell(content: string, page: Page): void {
 }
 
 function title(name: string, subtitle: string, action = ""): string { return `<div class="heading"><div><h1>${name}</h1><p>${subtitle}</p></div>${action}</div>`; }
-function showError(error: unknown): void { alert(error instanceof Error ? error.message : "Ocurrió un error inesperado."); }
+function showError(error: unknown): void {
+  const message = error instanceof Error ? error.message : "Ocurrió un error inesperado.";
+  app.innerHTML = `<div class="login"><div class="login-card"><div class="brand">alaska<small>Helados · ERP</small></div><p>${message}</p><div class="notice">Verifica que estés usando un navegador actualizado y vuelve a intentarlo.</div><button class="primary" id="retry-login">Intentar nuevamente</button></div></div>`;
+  document.querySelector<HTMLButtonElement>("#retry-login")?.addEventListener("click", () => bootstrap().catch(showError));
+}
 
 async function renderPos(): Promise<void> {
   if (!products.length) [products, flavors] = await Promise.all([api.products(), api.flavors()]);
@@ -98,7 +102,7 @@ async function bootstrap(): Promise<void> {
     app.innerHTML = `<div class="login"><div class="login-card"><div class="brand">alaska<small>Helados · ERP</small></div><p>La interfaz está lista, pero aún no tiene configurado un entorno Cognito/API. Crea <code>.env.local</code> a partir de <code>.env.example</code> y completa las variables del entorno dev cuando se despliegue.</p><div class="notice">Para verla localmente usa <strong>http://127.0.0.1:5173/</strong>, no abras <code>index.html</code> con <code>file://</code>.</div></div></div>`;
     return;
   }
-  try { await acceptCallback(); } catch (error) { app.innerHTML = `<div class="login"><div class="login-card"><div class="brand">alaska<small>Helados · ERP</small></div><p>${error instanceof Error ? error.message : "No fue posible iniciar sesión."}</p><button class="primary" id="retry-login">Intentar nuevamente</button></div></div>`; document.querySelector<HTMLButtonElement>("#retry-login")!.onclick = () => login(); return; }
+  try { await acceptCallback(); } catch (error) { showError(error); return; }
   if (!isAuthenticated()) { await login(); return; }
   await render();
 }
