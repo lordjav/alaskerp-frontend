@@ -35,9 +35,12 @@ jobs:
           git clone --branch gh-pages "https://x-access-token:${PAGES_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" pages || {
             mkdir pages && cd pages && git init && git checkout -b gh-pages && git remote add origin "https://x-access-token:${PAGES_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" && cd ..
           }
+          git -C pages fetch origin gh-pages
+          git -C pages checkout -B gh-pages origin/gh-pages
           if [ "$TARGET" = "." ]; then
             find pages -mindepth 1 -maxdepth 1 ! -name dev -exec rm -rf {} +
             cp -R dist/. pages/
+            echo "alaskerp.javiermeza.dev" > pages/CNAME
           else
             rm -rf pages/dev
             mkdir -p pages/dev
