@@ -10,12 +10,24 @@ npm install
 npm run dev
 ```
 
-Abre `http://localhost:5173/`. La plantilla de desarrollo usa la API CloudFront
-de desarrollo y el cliente Cognito correspondiente. `.env.local` no se sube a Git.
+Si Windows indica que `npm` no se reconoce, ejecuta desde PowerShell o CMD:
+
+```powershell
+.\Iniciar-local.cmd
+```
+
+Ese iniciador usa `npm` cuando está instalado y, en este equipo, puede usar el
+runtime local incluido con Codex. Instalar Node.js sigue siendo la opción portable
+para otros equipos.
+
+Abre `http://localhost:5173/`. La plantilla de desarrollo usa `/api` y el proxy de
+Vite para comunicarse con API Gateway sin depender de su lista CORS. El sitio
+publicado sí llama directamente a API Gateway. `.env.local` no se sube a Git.
 En Cognito deben estar permitidas las URL de callback y cierre de sesión
 `http://localhost:5173/`. El puerto se mantiene fijo para no cambiar ese callback.
-Para usar un backend local, reemplaza solo `VITE_API_URL` por su dirección real;
-debe usar un puerto distinto del frontend (5173).
+Para usar otro backend, cambia `VITE_API_PROXY_TARGET`; debe usar un puerto distinto
+del frontend (5173). Si el backend ya acepta CORS local también puedes configurar
+su URL directa en `VITE_API_URL` y eliminar `VITE_API_PROXY_TARGET`.
 
 El instalador de Windows se distribuye en `installers/AlaskaCaja-Instalador.zip`.
 
@@ -37,7 +49,7 @@ Las decisiones de producto están en [PLANNING.md](PLANNING.md).
 
 ## Tiquetes y cajón SAT15TUS
 
-Desde **Registrar venta → Tiquetes e impresora** se ajustan el nombre del negocio,
+Desde **Barra lateral → Tiquetes e impresora** se ajustan el nombre del negocio,
 dirección, teléfono, mensaje final y ancho. Valores guardados por navegador/equipo.
 El formato inicial usa 58 mm / 32 columnas; confirma el rollo instalado antes de
 cambiar a 80 mm / 42 columnas. Se usa texto ASCII (acentos transliterados) para
@@ -73,7 +85,7 @@ publicarse antes de que los botones nuevos aparezcan en el sitio en línea.
    ventana con **X** la minimiza. **Salir del conector**, en el menú junto al reloj,
    sí detiene la aplicación hasta que vuelvas a abrirla.
 3. Abre **Alaska Caja → Copiar clave para la web** y pega esa clave en
-   **Registrar venta → Tiquetes e impresora**. Guarda y comprueba la conexión.
+   **Barra lateral → Tiquetes e impresora**. Guarda y comprueba la conexión.
    Esta vinculación se hace una vez por navegador y por origen (dev/producción).
 4. Si el navegador solicita acceso al equipo/red local, concédelo al sitio del POS.
    Chrome aplica un permiso de acceso local: [documentación oficial](https://developer.chrome.com/blog/local-network-access).
