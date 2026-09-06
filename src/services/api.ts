@@ -24,7 +24,12 @@ export const api = {
   metrics: (start: string, end: string) => request<Metrics>(`/metrics?start=${start}&end=${end}`),
   cancelSale: (createdAt: string, reason: string) => request<Sale>(`/sales/${encodeURIComponent(createdAt)}/cancel`, { method: "POST", body: JSON.stringify({ reason }) }),
   createFlavor: (name: string) => request<Flavor>("/flavors", { method: "POST", body: JSON.stringify({ name }) }),
+  updateFlavor: (id: string, name: string) => request<Flavor>(`/flavors/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+  deleteFlavor: (id: string) => request<Flavor>(`/flavors/${id}`, { method: "DELETE" }),
   createProduct: (data: unknown) => request<Product>("/products", { method: "POST", body: JSON.stringify(data) }),
+  updateProduct: (id: string, data: unknown) => request<Product>(`/products/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteProduct: (id: string) => request<Product>(`/products/${id}`, { method: "DELETE" }),
   users: () => request<Array<{ username: string; email: string; enabled: boolean; status: string }>>("/users"),
   createUser: (data: unknown) => request<{ username: string }>("/users", { method: "POST", body: JSON.stringify(data) }),
+  setUserEnabled: (username: string, enabled: boolean) => request<{ username: string; enabled: boolean }>(`/users/${encodeURIComponent(username)}/status`, { method: "PATCH", body: JSON.stringify({ enabled }) }),
 };
