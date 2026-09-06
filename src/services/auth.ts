@@ -25,6 +25,7 @@ function decodeJwt(token: string): Record<string, unknown> {
 
 export function accessToken(): string | null { return sessionStorage.getItem(ACCESS); }
 export function roles(): Role[] { return (accessToken() ? (decodeJwt(accessToken()!) ["cognito:groups"] as Role[] | undefined) : []) ?? []; }
+export function username(): string { const token = accessToken(); if (!token) return ""; const claims = decodeJwt(token); return (claims["username"] ?? claims["cognito:username"] ?? claims["email"] ?? "") as string; }
 export function isAuthenticated(): boolean { return Boolean(accessToken()); }
 export function logout(): void { sessionStorage.removeItem(ACCESS); sessionStorage.removeItem(REFRESH); window.location.assign(`${config.cognitoDomain}/logout?client_id=${encodeURIComponent(config.cognitoClientId)}&logout_uri=${encodeURIComponent(callbackUrl())}`); }
 

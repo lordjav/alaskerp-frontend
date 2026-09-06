@@ -29,7 +29,7 @@ export const api = {
   createProduct: (data: unknown) => request<Product>("/products", { method: "POST", body: JSON.stringify(data) }),
   updateProduct: (id: string, data: unknown) => request<Product>(`/products/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteProduct: (id: string) => request<Product>(`/products/${id}`, { method: "DELETE" }),
-  users: () => request<Array<{ username: string; email: string; enabled: boolean; status: string }>>("/users"),
+  users: () => request<Array<{ username: string; email: string; enabled: boolean; status: string; role: string | null }>>("/users"),
   createUser: (data: unknown) => request<{ username: string }>("/users", { method: "POST", body: JSON.stringify(data) }),
   setUserEnabled: (username: string, enabled: boolean) => request<{ username: string; enabled: boolean }>(`/users/${encodeURIComponent(username)}/status`, { method: "PATCH", body: JSON.stringify({ enabled }) }),
 };
