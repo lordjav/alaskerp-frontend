@@ -29,9 +29,10 @@ jobs:
       - name: Publish selected environment
         env:
           TARGET: ${{ github.ref_name == 'main' && '.' || 'dev' }}
+          PAGES_TOKEN: ${{ github.token }}
         run: |
-          git clone --branch gh-pages "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" pages || {
-            mkdir pages && cd pages && git init && git checkout -b gh-pages && git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" && cd ..
+          git clone --branch gh-pages "https://x-access-token:${PAGES_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" pages || {
+            mkdir pages && cd pages && git init && git checkout -b gh-pages && git remote add origin "https://x-access-token:${PAGES_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" && cd ..
           }
           if [ "$TARGET" = "." ]; then
             find pages -mindepth 1 -maxdepth 1 ! -name dev -exec rm -rf {} +
