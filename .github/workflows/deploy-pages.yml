@@ -1,0 +1,46 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main, development]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: alaskerp-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Build
+        env:
+          VITE_API_URL: ${{ github.ref_name == 'main' && vars.PROD_API_URL || vars.DEV_API_URL }}
+          VITE_COGNITO_DOMAIN: ${{ github.ref_name == 'main' && vars.PROD_COGNITO_DOMAIN || vars.DEV_COGNITO_DOMAIN }}
+          VITE_COGNITO_CLIENT_ID: ${{ github.ref_name == 'main' && vars.PROD_COGNITO_CLIENT_ID || vars.DEV_COGNITO_CLIENT_ID }}
+          VITE_BASE_PATH: ${{ github.ref_name == 'main' && '/' || '/dev/' }}
+        run: npm run build
+      - name: Publish selected environment
+        env:
+          TARGET: ${{ github.ref_name == 'main' && '.' || 'dev' }}
+        run: |
+          git clone --branch gh-pages "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" pages || {
+            mkdir pages && cd pages && git init && git checkout -b gh-pages && git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" && cd ..
+          }
+          if [ "$TARGET" = "." ]; then
+            find pages -mindepth 1 -maxdepth 1 ! -name dev -exec rm -rf {} +
+            cp -R dist/. pages/
+          else
+            rm -rf pages/dev
+            mkdir -p pages/dev
+            cp -R dist/. pages/dev/
+          fi
+          git -C pages add .
+          git -C pages -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "Deploy ${GITHUB_SHA}"
+          git -C pages push origin gh-pages
