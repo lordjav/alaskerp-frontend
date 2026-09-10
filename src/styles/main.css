@@ -119,3 +119,20 @@ button:disabled:hover, button:disabled:active { transform: none; }
 .pos-tools { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
 .pos-tools button { font-size:13px; min-height:48px; }
 @media(max-width:700px) { .receipt-settings-grid{grid-template-columns:1fr}.receipt-paper{font-size:12px}.heading{flex-wrap:wrap} }
+
+/* Cash tendering and daily shift closure */
+.cash-payment { display:grid; grid-template-columns:minmax(0,1fr) minmax(180px,.75fr); gap:12px; margin-top:18px; align-items:end; }
+.cash-payment .field { font-size:15px; font-weight:750; }
+.cash-payment .field input { min-height:62px; font-size:21px; font-weight:800; }
+.cash-change { min-height:62px; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:0 16px; background:#effbdc; border:2px solid #b9dc80; border-radius:14px; color:#38550c; }
+.cash-change span { font-size:14px; font-weight:750; }
+.cash-change strong { font-size:22px; }
+.cash-change.invalid { background:#fff0f7; border-color:#efb4ce; color:#b50f5a; }
+.cash-help { grid-column:1/-1; margin:0; color:#756d5f; font-size:13px; }
+.closure-caption { margin:0 0 16px; color:#756d5f; }
+.closure-total { display:grid; grid-template-columns:1fr auto; gap:4px 12px; padding:18px; border-radius:16px; background:#effbdc; color:#38550c; }
+.closure-total strong { font-size:28px; }
+.closure-total small { grid-column:1/-1; font-weight:700; }
+.closure-breakdown { display:grid; gap:0; margin-top:16px; }
+.closure-breakdown > div { display:flex; justify-content:space-between; gap:12px; padding:13px 2px; border-bottom:1px solid #eee6db; }
+@media (max-width:700px) { .cash-payment { grid-template-columns:1fr; }.cash-help { grid-column:auto; } }
