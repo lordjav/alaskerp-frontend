@@ -12,6 +12,7 @@ let cart: CartItem[] = [];
 let chosenProduct: Product | null = null;
 let chosenFlavors: string[] = [];
 let selectedPayment = "cash";
+let cashReceived = "";
 let saleBusy = false;
 let pendingSale: { key: string; payload: string } | null = null;
 let lastSale: Sale | null = null;
@@ -22,16 +23,22 @@ const paymentLabels: Record<string, string> = { cash: "Efectivo", nequi: "Nequi"
 const allowed: Record<Page, Role[]> = { pos: ["seller", "manager", "admin"], sales: ["manager", "observer", "admin"], metrics: ["manager", "admin"], settings: ["admin"] };
 const money = (value: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(value);
 const capitalize = (value: string) => (value ? value[0].toUpperCase() + value.slice(1).toLowerCase() : value);
-const presentationRank: Record<string, number> = { Vaso: 0, Cono: 1, Tarrina: 2, Barril: 3 };
+const presentationRank: Record<string, number> = { Vaso: 0, Cono: 1, Concha: 2, Tarrina: 3, Barril: 4 };
 const byPresentation = (a: Product, b: Product) => (presentationRank[a.presentation] ?? 99) - (presentationRank[b.presentation] ?? 99) || a.price - b.price;
-const today = () => new Date().toISOString().slice(0, 10);
+const bogotaDate = (offsetDays = 0) => {
+  const date = new Date(Date.now() + offsetDays * 86_400_000);
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
+};
+const today = () => bogotaDate();
 const route = (): Page => (location.hash.replace("#/", "") || "pos") as Page;
 const has = (page: Page) => roles().some((role) => allowed[page].includes(role));
 
 function shell(content: string, page: Page): void {
   const nav = (Object.keys(labels) as Page[]).filter(has).map((item) => `<button class="${page === item ? "active" : ""}" data-nav="${item}">${labels[item]}</button>`).join("");
   const printerTools = has("pos") ? `<div class="side-tools"><button data-printer-settings>Tiquetes e impresora</button><button data-open-drawer>Abrir cajón</button></div>` : "";
-  app.innerHTML = `<div class="shell"><aside class="side"><div class="brand">alaska<small>Helados · ERP</small></div><nav class="nav">${nav}</nav>${printerTools}<footer class="side-user"><div class="user-card"><span class="user-avatar">${(username()[0] ?? "?").toUpperCase()}</span><span class="user-name" title="${username()}">${capitalize(username())}</span></div><button class="logout" data-logout><svg class="logout-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Cerrar sesión</button></footer></aside><main class="page ${page === "pos" ? "pos-page" : ""}">${content}</main></div>`;
+  app.innerHTML = `<div class="shell"><aside class="side"><div class="brand"><img class="brand-logo" src="${import.meta.env.BASE_URL}alaska-logo-white.png" alt="Alaska Helados"></div><nav class="nav">${nav}</nav>${printerTools}<footer class="side-user"><div class="user-card"><span class="user-avatar">${(username()[0] ?? "?").toUpperCase()}</span><span class="user-name" title="${username()}">${capitalize(username())}</span></div><button class="logout" data-logout><svg class="logout-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1 2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Cerrar sesión</button><small class="developer-credit">Desarrollado por <a href="https://javiermeza.dev" target="_blank" rel="noreferrer">javiermeza.dev</a></small></footer></aside><main class="page ${page === "pos" ? "pos-page" : ""}">${content}</main></div>`;
   document.querySelectorAll<HTMLButtonElement>("[data-nav]").forEach((button) => button.onclick = () => { location.hash = `#/${button.dataset.nav}`; });
   document.querySelector<HTMLButtonElement>("[data-printer-settings]")?.addEventListener("click", showPrinterSettings);
   document.querySelector<HTMLButtonElement>("[data-open-drawer]")?.addEventListener("click", event => void manualDrawer(event.currentTarget as HTMLButtonElement));
@@ -146,6 +153,31 @@ function editUserEntity(user: { username: string; email: string; enabled: boolea
   overlay.querySelector<HTMLButtonElement>("[data-toggle]")?.addEventListener("click", async () => { const enabled = !user.enabled; if (await askConfirmation(`${toggleLabel} usuario`, `¿Deseas ${toggleLabel.toLowerCase()} a ${capitalize(user.username)}?`, toggleLabel)) { await api.setUserEnabled(user.username, enabled); close(); await renderSettings(); } });
 }
 
+function chooseCashReceived(total: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    const { overlay, close } = buildModal(`<p class="step-label">Pago en efectivo</p><h2>¿Cuánto recibió?</h2><div class="cash-keypad-display" id="cash-keypad-display">${cashReceived ? money(Number(cashReceived)) : "$ 0"}</div><p class="cash-keypad-total">Total a cobrar: <strong>${money(total)}</strong></p><p class="cash-keypad-error" id="cash-keypad-error"></p><div class="cash-quick-values"><button class="outline" data-cash-quick="10000">$10.000</button><button class="outline" data-cash-quick="20000">$20.000</button><button class="outline" data-cash-quick="50000">$50.000</button><button class="outline" data-cash-quick="100000">$100.000</button></div><div class="cash-keypad"><button data-cash-key="1">1</button><button data-cash-key="2">2</button><button data-cash-key="3">3</button><button data-cash-key="4">4</button><button data-cash-key="5">5</button><button data-cash-key="6">6</button><button data-cash-key="7">7</button><button data-cash-key="8">8</button><button data-cash-key="9">9</button><button class="outline" data-cash-clear>Limpiar</button><button data-cash-key="0">0</button><button class="outline" data-cash-back aria-label="Borrar último dígito">⌫</button></div><div class="confirm-actions"><button class="outline" data-cash-cancel>Cancelar</button><button class="primary" data-cash-confirm>Continuar</button></div>`);
+    let value = cashReceived;
+    const display = overlay.querySelector<HTMLElement>("#cash-keypad-display")!;
+    const error = overlay.querySelector<HTMLElement>("#cash-keypad-error")!;
+    const render = () => {
+      const amount = Number(value);
+      display.textContent = value ? money(amount) : "$ 0";
+      error.textContent = value && amount < total ? `Faltan ${money(total - amount)} para completar el pago.` : "";
+    };
+    const finish = (result: string | null) => { close(); resolve(result); };
+    overlay.querySelectorAll<HTMLButtonElement>("[data-cash-key]").forEach((button) => button.onclick = () => { if (value.length < 8) value = `${value}${button.dataset.cashKey}`.replace(/^0+(?=\d)/, ""); render(); });
+    overlay.querySelectorAll<HTMLButtonElement>("[data-cash-quick]").forEach((button) => button.onclick = () => { value = button.dataset.cashQuick!; render(); });
+    overlay.querySelector<HTMLButtonElement>("[data-cash-clear]")!.onclick = () => { value = ""; render(); };
+    overlay.querySelector<HTMLButtonElement>("[data-cash-back]")!.onclick = () => { value = value.slice(0, -1); render(); };
+    overlay.querySelector<HTMLButtonElement>("[data-cash-cancel]")!.onclick = () => finish(null);
+    overlay.querySelector<HTMLButtonElement>("[data-cash-confirm]")!.onclick = () => {
+      if (!value || Number(value) < total) { error.textContent = `Recibe como mínimo ${money(total)}.`; return; }
+      finish(value);
+    };
+    render();
+  });
+}
+
 async function renderPos(): Promise<void> {
   if (!products.length) [products, flavors] = await Promise.all([api.products(), api.flavors()]);
   const productButtons = [...products].sort(byPresentation).map((p) => `<button class="choice ${chosenProduct?.id === p.id ? "selected" : ""}" data-product="${p.id}"><strong>${p.presentation} · ${p.size}</strong><span>${p.max_flavors} sabor${p.max_flavors > 1 ? "es" : ""} · ${money(p.price)}</span></button>`).join("");
@@ -154,18 +186,18 @@ async function renderPos(): Promise<void> {
   const total = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
   const paymentOptions = [["cash", "Efectivo"], ["nequi", "Nequi"], ["bancolombia", "Bancolombia"], ["credit_card", "Tarjeta"], ["other", "Otro"]] as const;
   const paymentButtons = paymentOptions.map(([value, label]) => `<button class="payment-option ${selectedPayment === value ? "selected" : ""}" data-payment="${value}">${label}</button>`).join("");
+  const received = Number(cashReceived);
+  const cashSummary = selectedPayment === "cash" ? `<div class="cash-payment"><button class="cash-launch" id="cash-received">${cashReceived ? `<span>Recibido</span><strong>${money(received)}</strong>` : "Ingresar pago recibido"}</button><div class="cash-change ${cashReceived && (!Number.isInteger(received) || received < total) ? "invalid" : ""}"><span>Devolución</span><strong>${cashReceived && Number.isInteger(received) && received >= total ? money(received - total) : "—"}</strong></div><p class="cash-help">${cashReceived && received < total ? `Faltan ${money(total - received)} para completar el pago.` : "La devolución se calcula al ingresar el efectivo recibido."}</p></div>` : "";
   const productModal = posModal === "products" ? `<div class="modal-backdrop"><section class="modal pos-modal" role="dialog" aria-modal="true"><div class="modal-heading"><div><p class="step-label">Paso 1 de 3</p><h2>Elige un producto</h2></div><button class="modal-close" data-close-products aria-label="Cerrar">×</button></div><div class="grid product-grid modal-products">${productButtons || "<div class=empty>No hay productos activos.</div>"}</div></section></div>` : "";
   const flavorModal = posModal === "flavors" && chosenProduct ? `<div class="modal-backdrop"><section class="modal pos-modal" role="dialog" aria-modal="true"><div class="modal-heading"><div><p class="step-label">Paso 2 de 3</p><h2>Elige ${chosenProduct.max_flavors} sabor${chosenProduct.max_flavors > 1 ? "es" : ""}</h2><p>${chosenProduct.presentation} · ${chosenProduct.size} · ${money(chosenProduct.price)}</p></div><button class="modal-close" data-close-modal aria-label="Cancelar selección">×</button></div><div class="flavor-progress"><span>${chosenFlavors.length} de ${chosenProduct.max_flavors} seleccionados</span><div><i style="width:${(chosenFlavors.length / chosenProduct.max_flavors) * 100}%"></i></div></div><div class="grid flavors modal-flavors">${flavorButtons}</div><button class="outline modal-cancel" data-close-modal>Cancelar</button></section></div>` : "";
   const quantityModal = posModal === "quantity" && chosenProduct ? `<div class="modal-backdrop"><section class="modal pos-modal quantity-modal" role="dialog" aria-modal="true"><div class="modal-heading"><div><p class="step-label">Paso 3 de 3</p><h2>¿Cuántos deseas?</h2><p>${chosenProduct.presentation} · ${chosenProduct.size} · ${chosenFlavors.join(", ")}</p></div><button class="modal-close" data-close-modal aria-label="Cancelar selección">×</button></div><div class="quantity-control modal-quantity"><button class="quantity-button" data-quantity-delta="-1" aria-label="Disminuir cantidad">−</button><output id="quantity">1</output><button class="quantity-button" data-quantity-delta="1" aria-label="Aumentar cantidad">+</button></div><button class="primary modal-add" id="add-cart">Agregar al carrito · ${money(chosenProduct.price)}</button><button class="outline modal-cancel" data-back-to-flavors>Volver a sabores</button></section></div>` : "";
-  shell(`${title("Registrar venta", "Toca el botón para elegir un producto.")}<div class="pos-screen"><div class="pos"><div class="pos-left"><section class="panel catalog-panel"><div><p class="step-label">Paso 1 de 3</p><h2 class="section-title">Producto</h2><button class="primary catalog-launch" data-open-products>Elegir producto</button></div><div class="pos-tools"><button class="outline" id="printer-settings">Tiquetes e impresora</button><button class="outline" id="open-drawer">Abrir cajón</button><button class="outline" id="last-receipt" ${lastSale ? "" : "disabled"}>Último tiquete</button></div><div class="catalog-hint">Elige cono o vaso y su tamaño. Después seleccionarás los sabores y la cantidad.</div></section><section class="panel payment-panel"><h2 class="section-title">Método de pago</h2><div class="payment-options">${paymentButtons}</div>${selectedPayment === "other" ? `<label class="field payment-comment">Comentario para Otro<input id="payment-comment" maxlength="300" placeholder="Describe el método de pago"></label>` : ""}</section></div><aside class="panel cart"><h2 class="section-title">Venta actual</h2><div class="cart-items">${cartItems}</div><div class="total"><span>Total</span><span>${money(total)}</span></div><button class="primary checkout-action" id="confirm-sale" ${!cart.length ? "disabled" : ""}>Confirmar venta</button></aside></div></div>${productModal}${flavorModal}${quantityModal}`, "pos");
-  document.querySelector<HTMLButtonElement>("#printer-settings")!.onclick = showPrinterSettings;
-  document.querySelector<HTMLButtonElement>("#open-drawer")!.onclick = event => void manualDrawer(event.currentTarget as HTMLButtonElement);
-  document.querySelector<HTMLButtonElement>("#last-receipt")!.onclick = () => { if (lastSale) showReceipt(lastSale, { canPrint: true }); };
+  shell(`${title("Registrar venta", "Toca el botón para elegir un producto.")}<div class="pos-screen"><div class="pos"><div class="pos-left"><section class="panel catalog-panel"><div><p class="step-label">Paso 1 de 3</p><h2 class="section-title">Producto</h2><button class="primary catalog-launch" data-open-products>Elegir producto</button></div></section><section class="panel payment-panel"><h2 class="section-title">Método de pago</h2><div class="payment-options">${paymentButtons}</div>${cashSummary}${selectedPayment === "other" ? `<label class="field payment-comment">Comentario para Otro<input id="payment-comment" maxlength="300" placeholder="Describe el método de pago"></label>` : ""}</section></div><aside class="panel cart"><h2 class="section-title">Venta actual</h2><div class="cart-items">${cartItems}</div><div class="total"><span>Total</span><span>${money(total)}</span></div><button class="primary checkout-action" id="confirm-sale" ${!cart.length ? "disabled" : ""}>Confirmar venta</button></aside></div></div>${productModal}${flavorModal}${quantityModal}`, "pos");
   document.querySelector<HTMLButtonElement>("[data-open-products]")?.addEventListener("click", () => { posModal = "products"; renderPos().catch(showError); });
   document.querySelectorAll<HTMLButtonElement>("[data-product]").forEach((button) => button.onclick = () => { chosenProduct = products.find((p) => p.id === button.dataset.product)!; chosenFlavors = []; posModal = "flavors"; renderPos().catch(showError); });
   document.querySelectorAll<HTMLButtonElement>("[data-flavor]").forEach((button) => button.onclick = () => { const flavor = button.dataset.flavor!; if (chosenFlavors.length < (chosenProduct?.max_flavors ?? 0)) chosenFlavors = [...chosenFlavors, flavor]; if (chosenProduct && chosenFlavors.length === chosenProduct.max_flavors) posModal = "quantity"; renderPos().catch(showError); });
   document.querySelectorAll<HTMLButtonElement>("[data-remove]").forEach((button) => button.onclick = () => { cart.splice(Number(button.dataset.remove), 1); renderPos().catch(showError); });
   document.querySelectorAll<HTMLButtonElement>("[data-payment]").forEach((button) => button.onclick = () => { selectedPayment = button.dataset.payment!; renderPos().catch(showError); });
+  document.querySelector<HTMLButtonElement>("#cash-received")?.addEventListener("click", async () => { const value = await chooseCashReceived(total); if (value !== null) { cashReceived = value; await renderPos(); } });
   document.querySelectorAll<HTMLButtonElement>("[data-quantity-delta]").forEach((button) => button.onclick = () => { const output = document.querySelector<HTMLOutputElement>("#quantity")!; output.value = String(Math.min(50, Math.max(1, Number(output.value) + Number(button.dataset.quantityDelta)))); const addCart = document.querySelector<HTMLButtonElement>("#add-cart"); if (addCart && chosenProduct) addCart.textContent = `Agregar al carrito · ${money(chosenProduct.price * Number(output.value))}`; });
   document.querySelectorAll<HTMLButtonElement>("[data-close-modal]").forEach((button) => button.onclick = () => { posModal = null; chosenProduct = null; chosenFlavors = []; renderPos().catch(showError); });
   document.querySelector<HTMLButtonElement>("[data-close-products]")?.addEventListener("click", () => { posModal = null; renderPos().catch(showError); });
@@ -185,8 +217,14 @@ async function confirmSale(): Promise<void> {
     const payment = selectedPayment;
     const paymentComment = document.querySelector<HTMLInputElement>("#payment-comment")?.value.trim() ?? "";
     if (payment === "other" && !paymentComment) { await notify("Falta el método de pago", "Escribe un comentario para el pago Otro."); return; }
+    const total = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+    const received = Number(cashReceived);
+    if (payment === "cash" && (!Number.isInteger(received) || received < total)) {
+      await notify("Pago insuficiente", `Recibe como mínimo ${money(total)} para confirmar la venta.`);
+      return;
+    }
     const payload = JSON.stringify({ items: cart.map(item => ({ product_id: item.product.id, flavors: item.flavors, quantity: item.quantity })), payment_type: payment, payment_comment: paymentComment || undefined });
-    if (!await askConfirmation("¿Confirmar venta?", `Registrarás una venta por ${money(cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0))}.`, "Confirmar venta")) return;
+    if (!await askConfirmation("¿Confirmar venta?", `Registrarás una venta por ${money(total)}.${payment === "cash" ? ` Devolución: ${money(received - total)}.` : ""}`, "Confirmar venta")) return;
     if (!pendingSale || pendingSale.payload !== payload) pendingSale = { key: crypto.randomUUID(), payload };
     saving = document.createElement("div"); saving.className = "modal-backdrop";
     saving.innerHTML = '<section class="modal" role="status" aria-live="polite">Registrando venta…</section>';
@@ -195,6 +233,7 @@ async function confirmSale(): Promise<void> {
     registered = true;
     saving.remove(); saving = undefined;
     lastSale = sale; pendingSale = null; cart = [];
+    cashReceived = "";
     await renderPos();
     showReceipt(sale, { newSale: true, canPrint: true });
   } catch (error) {
@@ -231,12 +270,25 @@ function exportSalesCsv(sales: Sale[], from: string, to: string): void {
   URL.revokeObjectURL(url);
 }
 
+function showShiftClosure(date: string, sales: Sale[]): void {
+  const activeSales = sales.filter((sale) => sale.status === "active");
+  const totals = activeSales.reduce<Record<string, number>>((result, sale) => {
+    result[sale.payment_type] = (result[sale.payment_type] ?? 0) + sale.total_sale;
+    return result;
+  }, {});
+  const total = activeSales.reduce((sum, sale) => sum + sale.total_sale, 0);
+  const rows = Object.entries(totals).sort(([a], [b]) => (paymentLabels[a] ?? a).localeCompare(paymentLabels[b] ?? b, "es"));
+  const { overlay, close } = buildModal(`<p class="step-label">Cierre de turno</p><h2>${date}</h2><p class="closure-caption">Consolidado de ventas activas del día.</p><div class="closure-total"><span>Total del turno</span><strong>${money(total)}</strong><small>${activeSales.length} venta${activeSales.length === 1 ? "" : "s"}</small></div><div class="closure-breakdown">${rows.length ? rows.map(([method, amount]) => `<div><span>${paymentLabels[method] ?? method}</span><strong>${money(amount)}</strong></div>`).join("") : "<p class=empty>No hay ventas activas hoy.</p>"}</div><div class="confirm-actions single"><button class="primary" data-close>Cerrar</button></div>`);
+  overlay.querySelector<HTMLButtonElement>("[data-close]")!.onclick = close;
+}
+
 async function paintSales(sales: Sale[], start: string, end: string): Promise<void> {
-  shell(`${title("Listado de ventas", "Consulta hasta 30 días de ventas. Las anuladas permanecen visibles.")}<div class="panel"><div class="actions" style="margin-bottom:18px"><label class="field">Desde<input id="sales-start" type="date" value="${start}"></label><label class="field">Hasta<input id="sales-end" type="date" value="${end}"></label><button class="secondary" id="search-sales">Consultar</button><button class="outline" id="export-sales" ${sales.length ? "" : "disabled"}>Exportar</button></div><table class="table"><thead><tr><th>Fecha</th><th>Vendedor</th><th>Productos</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>${salesRows(sales)}</tbody></table></div>`, "sales");
+  shell(`${title("Listado de ventas", "Consulta hasta 30 días de ventas. Las anuladas permanecen visibles.")}<div class="panel"><div class="actions" style="margin-bottom:18px"><label class="field">Desde<input id="sales-start" type="date" value="${start}"></label><label class="field">Hasta<input id="sales-end" type="date" value="${end}"></label><button class="secondary" id="search-sales">Consultar</button><button class="outline" id="export-sales" ${sales.length ? "" : "disabled"}>Exportar</button><button class="primary" id="shift-closure">Cierre de turno</button></div><table class="table"><thead><tr><th>Fecha</th><th>Vendedor</th><th>Productos</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>${salesRows(sales)}</tbody></table></div>`, "sales");
   document.querySelectorAll<HTMLButtonElement>("[data-receipt]").forEach(button => button.onclick = () => showReceipt(sales[Number(button.dataset.receipt)], { canPrint: has("pos") }));
   const range = () => ({ from: document.querySelector<HTMLInputElement>("#sales-start")!.value, to: document.querySelector<HTMLInputElement>("#sales-end")!.value });
   document.querySelector<HTMLButtonElement>("#search-sales")?.addEventListener("click", async () => { const { from, to } = range(); if (!from || !to) return; await paintSales(await api.sales(from, to, true), from, to); });
   document.querySelector<HTMLButtonElement>("#export-sales")?.addEventListener("click", () => { const { from, to } = range(); exportSalesCsv(sales, from, to); });
+  document.querySelector<HTMLButtonElement>("#shift-closure")?.addEventListener("click", async () => { const date = today(); showShiftClosure(date, await api.sales(date, date, true)); });
   document.querySelectorAll<HTMLButtonElement>("[data-cancel]").forEach((button) => button.onclick = async () => { const reason = await askText("Anular venta", "Motivo de anulación", { confirmText: "Anular venta" }); if (!reason?.trim()) return; await api.cancelSale(button.dataset.cancel!, reason); const { from, to } = range(); await paintSales(await api.sales(from, to, true), from, to); });
 }
 
@@ -248,7 +300,7 @@ async function renderSales(): Promise<void> {
 const scoops = (value: number) => `${value} bola${value === 1 ? "" : "s"}`;
 function breakdown(titleText: string, values: Record<string, number>, format: (key: string) => string = (key) => key, formatValue: (value: number) => string = money): string { return `<div class="panel"><h2 class="section-title">${titleText}</h2><ul>${Object.entries(values).sort((a, b) => b[1] - a[1]).map(([name, value]) => `<li><span>${format(name)}</span><strong>${formatValue(value)}</strong></li>`).join("") || "<li>Sin datos</li>"}</ul></div>`; }
 async function renderMetrics(): Promise<void> {
-  const end = today(); const startDate = new Date(); startDate.setDate(startDate.getDate() - 6); const start = startDate.toISOString().slice(0, 10);
+  const end = today(); const start = bogotaDate(-6);
   const data: Metrics = await api.metrics(start, end);
   shell(`${title("Métricas", `${start} a ${end} · ventas netas, sin anulaciones.`)}<section class="metrics"><div class="metric"><span>Ventas netas</span><b>${money(data.net_sales)}</b></div><div class="metric"><span>Número de ventas</span><b>${data.sale_count}</b></div><div class="metric"><span>Promedio por venta</span><b>${money(data.sale_count ? Math.round(data.net_sales / data.sale_count) : 0)}</b></div><div class="metric"><span>Días con ventas</span><b>${Object.keys(data.daily).length}</b></div></section><section class="breakdown">${breakdown("Por método de pago", data.payment_types, (key) => paymentLabels[key] ?? key)}${breakdown("Por producto", data.products)}${breakdown("Por vendedor", data.sellers, capitalize)}${breakdown("Por sabor", data.flavors, (key) => key, scoops)}</section>`, "metrics");
 }
@@ -256,8 +308,7 @@ async function renderMetrics(): Promise<void> {
 async function renderSettings(): Promise<void> {
   const [productList, flavorList, userList] = await Promise.all([api.products(), api.flavors(), api.users()]);
   const end = today();
-  const startDate = new Date(); startDate.setDate(startDate.getDate() - 29);
-  const start = startDate.toISOString().slice(0, 10);
+  const start = bogotaDate(-29);
   let usage: Metrics | null = null;
   try { usage = await api.metrics(start, end); } catch { usage = null; }
   const flavorUse = (name: string) => usage?.flavors[name] ?? 0;

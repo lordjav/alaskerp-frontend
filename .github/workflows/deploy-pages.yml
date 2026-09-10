@@ -25,7 +25,7 @@ jobs:
           VITE_API_URL: ${{ github.ref_name == 'main' && vars.PROD_API_URL || vars.DEV_API_URL }}
           VITE_COGNITO_DOMAIN: ${{ github.ref_name == 'main' && vars.PROD_COGNITO_DOMAIN || vars.DEV_COGNITO_DOMAIN }}
           VITE_COGNITO_CLIENT_ID: ${{ github.ref_name == 'main' && vars.PROD_COGNITO_CLIENT_ID || vars.DEV_COGNITO_CLIENT_ID }}
-          VITE_BASE_PATH: ${{ github.ref_name == 'main' && '/' || '/alaskerp-frontend/dev/' }}
+          VITE_BASE_PATH: ${{ github.ref_name == 'main' && '/' || '/dev/' }}
         run: npm run build
       - name: Publish selected environment
         env:

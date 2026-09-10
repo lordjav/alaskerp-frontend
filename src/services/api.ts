@@ -20,7 +20,12 @@ export const api = {
   products: () => request<Product[]>("/products"),
   flavors: () => request<Flavor[]>("/flavors"),
   createSale: (data: unknown, key: string) => request<{ sale: Sale }>("/sales", { method: "POST", body: JSON.stringify(data), headers: { "Idempotency-Key": key } }),
-  sales: (start: string, end: string, cancelled = false) => request<Sale[]>(`/sales?start=${start}T00%3A00%3A00.000Z&end=${end}T23%3A59%3A59.999Z&include_cancelled=${cancelled}`),
+  sales: (start: string, end: string, cancelled = false) => {
+    const nextDay = new Date(`${end}T12:00:00-05:00`);
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+    const next = nextDay.toISOString().slice(0, 10);
+    return request<Sale[]>(`/sales?start=${encodeURIComponent(`${start}T05:00:00.000Z`)}&end=${encodeURIComponent(`${next}T04:59:59.999Z`)}&include_cancelled=${cancelled}`);
+  },
   metrics: (start: string, end: string) => request<Metrics>(`/metrics?start=${start}&end=${end}`),
   cancelSale: (createdAt: string, reason: string) => request<Sale>(`/sales/${encodeURIComponent(createdAt)}/cancel`, { method: "POST", body: JSON.stringify({ reason }) }),
   createFlavor: (name: string) => request<Flavor>("/flavors", { method: "POST", body: JSON.stringify({ name }) }),
