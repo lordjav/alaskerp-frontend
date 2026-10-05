@@ -52,7 +52,12 @@ export async function acceptCallback(): Promise<boolean> {
   const code = new URLSearchParams(window.location.search).get("code");
   if (!code) return false;
   const verifier = sessionStorage.getItem(VERIFIER);
-  if (!verifier) throw new Error("No se encontró la verificación de inicio de sesión.");
+  if (!verifier) {
+    // An old callback URL can outlive its tab's sessionStorage. Discard that
+    // one-time code so bootstrap can start a fresh PKCE login instead.
+    history.replaceState({}, "", `${config.basePath}${window.location.hash || "#/pos"}`);
+    return false;
+  }
   const body = new URLSearchParams({ grant_type: "authorization_code", client_id: config.cognitoClientId, code, redirect_uri: callbackUrl(), code_verifier: verifier });
   const response = await fetch(`${config.cognitoDomain}/oauth2/token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
   if (!response.ok) throw new Error("No fue posible completar el inicio de sesión.");
