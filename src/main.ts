@@ -6,6 +6,7 @@ import { authConfigured } from "./services/config";
 import type { CartItem, Flavor, Metrics, Page, Product, Role, Sale } from "./models";
 import { renderExpensesPreview, renderExpenseSettingsPreview, renderTransactionsPreview } from "./expenses-preview";
 import { renderExpenseRegistration, renderExpenseSettings, renderExpenseTransactions } from "./expenses";
+import { renderExpenseCategoryChart, renderHourlySalesChart, renderPaymentStack, renderTreemap, renderWeeklyChart } from "./components/metrics-charts";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 let products: Product[] = [];
@@ -21,6 +22,7 @@ let lastSale: Sale | null = null;
 let posModal: "products" | "flavors" | "quantity" | null = null;
 let transactionsSection: "sales" | "expenses" = "sales";
 let settingsSection: "products" | "users" | "expenses" = "products";
+let metricsTooltipAbort: AbortController | null = null;
 
 const expensePreview = import.meta.env.DEV && new URLSearchParams(location.search).get("preview") === "expenses";
 const labels: Record<Page, string> = { pos: "Registrar venta", expenses: "Registrar gasto", sales: "Transacciones", metrics: "Métricas", settings: "Configuración" };
@@ -41,6 +43,7 @@ const route = (): Page => (location.hash.replace("#/", "") || "pos") as Page;
 const has = (page: Page) => expensePreview ? page === "expenses" || page === "sales" || page === "settings" : roles().some((role) => allowed[page].includes(role));
 
 function shell(content: string, page: Page): void {
+  metricsTooltipAbort?.abort();
   const nav = (Object.keys(labels) as Page[]).filter(has).map((item) => `<button class="${page === item ? "active" : ""}" data-nav="${item}">${labels[item]}</button>`).join("");
   const printerTools = !expensePreview && has("pos") ? `<div class="side-tools"><button data-printer-settings>Tiquetes e impresora</button></div>` : "";
   app.innerHTML = `<div class="shell"><aside class="side"><div class="brand"><img class="brand-logo" src="${import.meta.env.BASE_URL}alaska-logo-white.png" alt="Alaska Helados"></div><button class="mobile-menu-toggle" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu" aria-label="Abrir menú"><span></span><span></span><span></span></button><div class="side-menu" id="mobile-menu"><nav class="nav" aria-label="Navegación principal">${nav}</nav>${printerTools}<footer class="side-user"><div class="user-card"><span class="user-avatar">${expensePreview ? "D" : (username()[0] ?? "?").toUpperCase()}</span><span class="user-name" title="${expensePreview ? "Vista previa" : username()}">${expensePreview ? "Vista previa" : capitalize(username())}</span></div>${expensePreview ? "" : `<button class="logout" data-logout><svg class="logout-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1 2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Cerrar sesión</button>`}<small class="developer-credit">Desarrollado por <a href="https://javiermeza.dev" target="_blank" rel="noreferrer">javiermeza.dev</a></small></footer></div></aside><main class="page ${page === "pos" ? "pos-page" : ""}">${content}</main></div>`;
@@ -327,11 +330,45 @@ async function renderSales(): Promise<void> {
 }
 
 const scoops = (value: number) => `${value} bola${value === 1 ? "" : "s"}`;
-function breakdown(titleText: string, values: Record<string, number>, format: (key: string) => string = (key) => key, formatValue: (value: number) => string = money): string { return `<div class="panel"><h2 class="section-title">${titleText}</h2><ul>${Object.entries(values).sort((a, b) => b[1] - a[1]).map(([name, value]) => `<li><span>${format(name)}</span><strong>${formatValue(value)}</strong></li>`).join("") || "<li>Sin datos</li>"}</ul></div>`; }
 async function renderMetrics(): Promise<void> {
-  const end = today(); const start = bogotaDate(-6);
-  const data: Metrics = await api.metrics(start, end);
-  shell(`${title("Métricas", `${start} a ${end} · ventas netas, sin anulaciones.`)}<section class="metrics"><div class="metric"><span>Ventas netas</span><b>${money(data.net_sales)}</b></div><div class="metric"><span>Número de ventas</span><b>${data.sale_count}</b></div><div class="metric"><span>Promedio por venta</span><b>${money(data.sale_count ? Math.round(data.net_sales / data.sale_count) : 0)}</b></div><div class="metric"><span>Días con ventas</span><b>${Object.keys(data.daily).length}</b></div></section><section class="breakdown">${breakdown("Por método de pago", data.payment_types, (key) => paymentLabels[key] ?? key)}${breakdown("Por producto", data.products)}${breakdown("Por vendedor", data.sellers, capitalize)}${breakdown("Por sabor", data.flavors, (key) => key, scoops)}</section>`, "metrics");
+  const end = today(); const start = `${end.slice(0, 7)}-01`;
+  const sixMonthDate = new Date(`${start}T12:00:00Z`);
+  sixMonthDate.setUTCMonth(sixMonthDate.getUTCMonth() - 5);
+  const sixMonthStart = sixMonthDate.toISOString().slice(0, 10);
+  const [data, expenseHistory]: [Metrics, Awaited<ReturnType<typeof api.expenses>>] = await Promise.all([api.metrics(start, end), api.expenses(sixMonthStart, end)]);
+  const netExpenses = expenseHistory.items.filter((expense) => expense.expense_date >= start).reduce((sum, expense) => sum + expense.amount, 0);
+  const balance = data.net_sales - netExpenses;
+  const goal = netExpenses ? `${new Intl.NumberFormat("es-CO", { maximumFractionDigits: 1 }).format(data.net_sales / netExpenses * 100)} %` : "—";
+  const month = new Intl.DateTimeFormat("es-CO", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${start}T12:00:00Z`));
+  const monthLabel = month.charAt(0).toUpperCase() + month.slice(1);
+  shell(`${title("Métricas", `${monthLabel} · ventas y gastos del 1 al ${Number(end.slice(8))}.`)}<section class="metrics" aria-label="Ventas del mes"><div class="metric"><span>Ventas netas</span><b>${money(data.net_sales)}</b></div><div class="metric"><span>Número de ventas</span><b>${data.sale_count}</b></div><div class="metric"><span>Promedio por venta</span><b>${money(data.sale_count ? Math.round(data.net_sales / data.sale_count) : 0)}</b></div></section><section class="metrics metrics-secondary" aria-label="Gastos y balance del mes"><div class="metric"><span>Gastos netos</span><b>${money(netExpenses)}</b></div><div class="metric"><span>Balance</span><b>${money(balance)}</b></div><div class="metric" title="Ventas netas ÷ gastos netos × 100"><span>Meta</span><b>${goal}</b></div></section>${renderWeeklyChart(start, end, data.daily, money)}${renderPaymentStack(data.payment_types, paymentLabels, money)}<section class="metrics-treemap-grid">${renderTreemap("Por producto", data.products, money, "Tamaño según ventas en COP")}${renderTreemap("Por sabor", data.flavors, scoops, "Tamaño según bolas vendidas")}</section>${renderHourlySalesChart(data.hourly, money)}${renderExpenseCategoryChart(expenseHistory.items, end, money)}`, "metrics");
+  const tooltip = document.querySelector<HTMLDivElement>("#metrics-point-popover")!;
+  const controller = new AbortController();
+  metricsTooltipAbort = controller;
+  const hideTooltip = () => { tooltip.hidden = true; };
+  const showTooltip = (point: SVGGElement) => {
+    tooltip.querySelector("strong")!.textContent = point.getAttribute("data-label") ?? "";
+    tooltip.querySelector("span")!.textContent = point.getAttribute("data-value") ?? "";
+    tooltip.hidden = false;
+    const marker = (point.querySelector("[data-tooltip-anchor]") ?? point).getBoundingClientRect();
+    const width = tooltip.offsetWidth, height = tooltip.offsetHeight;
+    tooltip.style.left = `${Math.max(8, Math.min(document.documentElement.clientWidth - width - 8, marker.left + marker.width / 2 - width / 2))}px`;
+    tooltip.style.top = `${marker.top - height - 10 >= 8 ? marker.top - height - 10 : marker.bottom + 10}px`;
+  };
+  document.querySelectorAll<SVGGElement>(".metrics-data-point").forEach((point) => {
+    point.addEventListener("pointerenter", () => showTooltip(point), { signal: controller.signal });
+    point.addEventListener("pointerleave", hideTooltip, { signal: controller.signal });
+    point.addEventListener("focus", () => showTooltip(point), { signal: controller.signal });
+    point.addEventListener("blur", hideTooltip, { signal: controller.signal });
+    point.addEventListener("click", () => showTooltip(point), { signal: controller.signal });
+  });
+  document.addEventListener("pointerdown", (event) => { if (!(event.target as Element).closest(".metrics-data-point")) hideTooltip(); }, { signal: controller.signal });
+  window.addEventListener("scroll", () => {
+    const focused = document.activeElement;
+    if (focused instanceof SVGGElement && focused.classList.contains("metrics-data-point")) showTooltip(focused);
+    else hideTooltip();
+  }, { signal: controller.signal, capture: true });
+  window.addEventListener("resize", hideTooltip, { signal: controller.signal });
 }
 
 async function renderSettings(): Promise<void> {

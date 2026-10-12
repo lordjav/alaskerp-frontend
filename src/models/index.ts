@@ -19,4 +19,4 @@ export interface ExpenseCategory { id: string; name: string; is_active: boolean;
 export interface ExpensePreset { id: string; name: string; category_id: string; category_name: string; payment_type: ExpensePayment; suggested_amount: number | null; is_active: boolean; }
 export interface Expense { id: string; expense_date: string; created_at: string; name: string; amount: number; category_id: string; category_name: string; payment_type: ExpensePayment; note: string; responsible: { username: string; user_id: string }; preset_id: string | null; }
 export interface ExpenseList { items: Expense[]; total_amount: number; count: number; }
-export interface Metrics { net_sales: number; sale_count: number; daily: Record<string, number>; payment_types: Record<string, number>; products: Record<string, number>; sellers: Record<string, number>; flavors: Record<string, number>; }
+export interface Metrics { net_sales: number; sale_count: number; daily: Record<string, number>; hourly: Record<string, number>; payment_types: Record<string, number>; products: Record<string, number>; sellers: Record<string, number>; flavors: Record<string, number>; }
