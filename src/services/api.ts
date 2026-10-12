@@ -1,4 +1,4 @@
-import type { Flavor, Metrics, Product, Sale } from "../models";
+import type { Expense, ExpenseCategory, ExpenseList, ExpensePreset, Flavor, Metrics, Product, Sale } from "../models";
 import { accessToken, logout, refreshSession } from "./auth";
 import { config } from "./config";
 
@@ -12,7 +12,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     response = await fetch(`${config.apiUrl}${path}`, { ...init, headers });
   }
   if (response.status === 401) { logout(); throw new Error("Sesión vencida."); }
-  if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.detail ?? "No se pudo completar la operación."); }
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const detail = Array.isArray(body.detail) ? body.detail.map((item: { msg?: string }) => item.msg).filter(Boolean).join(" ") : body.detail;
+    throw new Error(typeof detail === "string" ? detail : "No se pudo completar la operación.");
+  }
   return response.json() as Promise<T>;
 }
 
@@ -28,6 +32,16 @@ export const api = {
   },
   metrics: (start: string, end: string) => request<Metrics>(`/metrics?start=${start}&end=${end}`),
   cancelSale: (createdAt: string, reason: string) => request<Sale>(`/sales/${encodeURIComponent(createdAt)}/cancel`, { method: "POST", body: JSON.stringify({ reason }) }),
+  expenseCategories: () => request<ExpenseCategory[]>("/expense-categories"),
+  createExpenseCategory: (name: string) => request<ExpenseCategory>("/expense-categories", { method: "POST", body: JSON.stringify({ name }) }),
+  updateExpenseCategory: (id: string, name: string) => request<ExpenseCategory>(`/expense-categories/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+  deleteExpenseCategory: (id: string) => request<ExpenseCategory>(`/expense-categories/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  expensePresets: () => request<ExpensePreset[]>("/expense-presets"),
+  createExpensePreset: (data: unknown) => request<ExpensePreset>("/expense-presets", { method: "POST", body: JSON.stringify(data) }),
+  updateExpensePreset: (id: string, data: unknown) => request<ExpensePreset>(`/expense-presets/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteExpensePreset: (id: string) => request<ExpensePreset>(`/expense-presets/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  createExpense: (data: unknown, key: string) => request<{ created: boolean; expense: Expense }>("/expenses", { method: "POST", body: JSON.stringify(data), headers: { "Idempotency-Key": key } }),
+  expenses: (start: string, end: string) => request<ExpenseList>(`/expenses?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`),
   createFlavor: (name: string) => request<Flavor>("/flavors", { method: "POST", body: JSON.stringify({ name }) }),
   updateFlavor: (id: string, name: string) => request<Flavor>(`/flavors/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
   deleteFlavor: (id: string) => request<Flavor>(`/flavors/${id}`, { method: "DELETE" }),
