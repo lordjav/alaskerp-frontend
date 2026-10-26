@@ -9,6 +9,9 @@ function dialog(heading: string): { overlay: HTMLDivElement; content: HTMLElemen
   overlay.querySelector("h2")!.textContent = heading;
   const close = () => { overlay.remove(); previous?.focus(); };
   overlay.querySelector<HTMLButtonElement>(".modal-close")!.onclick = close;
+  overlay.addEventListener("click", event => {
+    if (event.target === overlay && !overlay.querySelector("button:disabled")) close();
+  });
   overlay.addEventListener("keydown", event => {
     if (event.key === "Escape" && !overlay.querySelector("button:disabled")) close();
     if (event.key === "Tab") {

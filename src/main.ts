@@ -1,9 +1,12 @@
-import { showReceipt, showPrinterSettings, manualDrawer } from "./components/receipts";
+import { showReceipt, showPrinterSettings } from "./components/receipts";
 import "./styles/main.css";
 import { api } from "./services/api";
 import { acceptCallback, isAuthenticated, login, logout, roles, username } from "./services/auth";
 import { authConfigured } from "./services/config";
 import type { CartItem, Flavor, Metrics, Page, Product, Role, Sale } from "./models";
+import { renderExpensesPreview, renderExpenseSettingsPreview, renderTransactionsPreview } from "./expenses-preview";
+import { renderExpenseRegistration, renderExpenseSettings, renderExpenseTransactions } from "./expenses";
+import { renderExpenseCategoryChart, renderHourlySalesChart, renderPaymentStack, renderTreemap, renderWeeklyChart } from "./components/metrics-charts";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 let products: Product[] = [];
@@ -17,10 +20,14 @@ let saleBusy = false;
 let pendingSale: { key: string; payload: string } | null = null;
 let lastSale: Sale | null = null;
 let posModal: "products" | "flavors" | "quantity" | null = null;
+let transactionsSection: "sales" | "expenses" = "sales";
+let settingsSection: "products" | "users" | "expenses" = "products";
+let metricsTooltipAbort: AbortController | null = null;
 
-const labels: Record<Page, string> = { pos: "Registrar venta", sales: "Listado de ventas", metrics: "Métricas", settings: "Configuración" };
+const expensePreview = import.meta.env.DEV && new URLSearchParams(location.search).get("preview") === "expenses";
+const labels: Record<Page, string> = { pos: "Registrar venta", expenses: "Registrar gasto", sales: "Transacciones", metrics: "Métricas", settings: "Configuración" };
 const paymentLabels: Record<string, string> = { cash: "Efectivo", nequi: "Nequi", bancolombia: "Bancolombia", credit_card: "Tarjeta", other: "Otro" };
-const allowed: Record<Page, Role[]> = { pos: ["seller", "manager", "admin"], sales: ["manager", "observer", "admin"], metrics: ["manager", "admin"], settings: ["admin"] };
+const allowed: Record<Page, Role[]> = { pos: ["seller", "manager", "admin"], expenses: ["seller", "manager", "observer", "admin"], sales: ["manager", "observer", "admin"], metrics: ["manager", "admin"], settings: ["admin"] };
 const money = (value: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(value);
 const capitalize = (value: string) => (value ? value[0].toUpperCase() + value.slice(1).toLowerCase() : value);
 const presentationRank: Record<string, number> = { Vaso: 0, Cono: 1, Concha: 2, Tarrina: 3, Barril: 4 };
@@ -33,12 +40,13 @@ const bogotaDate = (offsetDays = 0) => {
 };
 const today = () => bogotaDate();
 const route = (): Page => (location.hash.replace("#/", "") || "pos") as Page;
-const has = (page: Page) => roles().some((role) => allowed[page].includes(role));
+const has = (page: Page) => expensePreview ? page === "expenses" || page === "sales" || page === "settings" : roles().some((role) => allowed[page].includes(role));
 
 function shell(content: string, page: Page): void {
+  metricsTooltipAbort?.abort();
   const nav = (Object.keys(labels) as Page[]).filter(has).map((item) => `<button class="${page === item ? "active" : ""}" data-nav="${item}">${labels[item]}</button>`).join("");
-  const printerTools = has("pos") ? `<div class="side-tools"><button data-printer-settings>Tiquetes e impresora</button><button data-open-drawer>Abrir cajón</button></div>` : "";
-  app.innerHTML = `<div class="shell"><aside class="side"><div class="brand"><img class="brand-logo" src="${import.meta.env.BASE_URL}alaska-logo-white.png" alt="Alaska Helados"></div><button class="mobile-menu-toggle" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu" aria-label="Abrir menú"><span></span><span></span><span></span></button><div class="side-menu" id="mobile-menu"><nav class="nav" aria-label="Navegación principal">${nav}</nav>${printerTools}<footer class="side-user"><div class="user-card"><span class="user-avatar">${(username()[0] ?? "?").toUpperCase()}</span><span class="user-name" title="${username()}">${capitalize(username())}</span></div><button class="logout" data-logout><svg class="logout-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1 2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Cerrar sesión</button><small class="developer-credit">Desarrollado por <a href="https://javiermeza.dev" target="_blank" rel="noreferrer">javiermeza.dev</a></small></footer></div></aside><main class="page ${page === "pos" ? "pos-page" : ""}">${content}</main></div>`;
+  const printerTools = !expensePreview && has("pos") ? `<div class="side-tools"><button data-printer-settings>Tiquetes e impresora</button></div>` : "";
+  app.innerHTML = `<div class="shell"><aside class="side"><div class="brand"><img class="brand-logo" src="${import.meta.env.BASE_URL}alaska-logo-white.png" alt="Alaska Helados"></div><button class="mobile-menu-toggle" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu" aria-label="Abrir menú"><span></span><span></span><span></span></button><div class="side-menu" id="mobile-menu"><nav class="nav" aria-label="Navegación principal">${nav}</nav>${printerTools}<footer class="side-user"><div class="user-card"><span class="user-avatar">${expensePreview ? "D" : (username()[0] ?? "?").toUpperCase()}</span><span class="user-name" title="${expensePreview ? "Vista previa" : username()}">${expensePreview ? "Vista previa" : capitalize(username())}</span></div>${expensePreview ? "" : `<button class="logout" data-logout><svg class="logout-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1 2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Cerrar sesión</button>`}<small class="developer-credit">Desarrollado por <a href="https://javiermeza.dev" target="_blank" rel="noreferrer">javiermeza.dev</a></small></footer></div></aside><main class="page ${page === "pos" ? "pos-page" : ""}">${content}</main></div>`;
   document.querySelector<HTMLButtonElement>("[data-menu-toggle]")?.addEventListener("click", (event) => {
     const button = event.currentTarget as HTMLButtonElement;
     const expanded = button.getAttribute("aria-expanded") !== "true";
@@ -48,7 +56,6 @@ function shell(content: string, page: Page): void {
   });
   document.querySelectorAll<HTMLButtonElement>("[data-nav]").forEach((button) => button.onclick = () => { location.hash = `#/${button.dataset.nav}`; });
   document.querySelector<HTMLButtonElement>("[data-printer-settings]")?.addEventListener("click", showPrinterSettings);
-  document.querySelector<HTMLButtonElement>("[data-open-drawer]")?.addEventListener("click", event => void manualDrawer(event.currentTarget as HTMLButtonElement));
   document.querySelector<HTMLButtonElement>("[data-logout]")?.addEventListener("click", logout);
 }
 
@@ -59,12 +66,17 @@ function showError(error: unknown): void {
   document.querySelector<HTMLButtonElement>("#retry-login")?.addEventListener("click", () => bootstrap().catch(showError));
 }
 
+function dismissOnBackdrop(overlay: HTMLDivElement, dismiss: () => void): void {
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) dismiss(); });
+}
+
 function askConfirmation(titleText: string, message: string, confirmText: string): Promise<boolean> {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.className = "modal-backdrop";
     overlay.innerHTML = `<section class="modal confirm-modal" role="dialog" aria-modal="true"><p class="step-label">Confirma la acción</p><h2>${titleText}</h2><p>${message}</p><div class="confirm-actions"><button class="outline" data-confirm-no>Cancelar</button><button class="primary" data-confirm-yes>${confirmText}</button></div></section>`;
     const close = (result: boolean) => { overlay.remove(); resolve(result); };
+    dismissOnBackdrop(overlay, () => close(false));
     overlay.querySelector<HTMLButtonElement>("[data-confirm-no]")!.onclick = () => close(false);
     overlay.querySelector<HTMLButtonElement>("[data-confirm-yes]")!.onclick = () => close(true);
     document.body.append(overlay);
@@ -77,6 +89,7 @@ function notify(titleText: string, message: string): Promise<void> {
     overlay.className = "modal-backdrop";
     overlay.innerHTML = `<section class="modal confirm-modal" role="dialog" aria-modal="true"><p class="step-label">Listo</p><h2>${titleText}</h2><p>${message}</p><div class="confirm-actions single"><button class="primary" data-ok>Entendido</button></div></section>`;
     const close = () => { overlay.remove(); resolve(); };
+    dismissOnBackdrop(overlay, close);
     const button = overlay.querySelector<HTMLButtonElement>("[data-ok]")!;
     button.onclick = close;
     document.body.append(overlay);
@@ -92,6 +105,7 @@ function askText(titleText: string, label: string, opts: { value?: string; place
     const input = overlay.querySelector<HTMLInputElement>(".modal-input")!;
     input.value = opts.value ?? "";
     const close = (result: string | null) => { overlay.remove(); resolve(result); };
+    dismissOnBackdrop(overlay, () => close(null));
     const confirm = () => { const value = input.value.trim(); if (!value) { input.focus(); return; } close(value); };
     overlay.querySelector<HTMLButtonElement>("[data-cancel]")!.onclick = () => close(null);
     overlay.querySelector<HTMLButtonElement>("[data-confirm]")!.onclick = confirm;
@@ -114,6 +128,7 @@ function askForm(titleText: string, fields: Array<{ name: string; label: string;
     const elements = Array.from(overlay.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-name]"));
     fields.forEach((field, index) => { if (field.value !== undefined) elements[index].value = field.value; });
     const close = (result: Record<string, string> | null) => { overlay.remove(); resolve(result); };
+    dismissOnBackdrop(overlay, () => close(null));
     overlay.querySelector<HTMLButtonElement>("[data-cancel]")!.onclick = () => close(null);
     overlay.querySelector<HTMLButtonElement>("[data-confirm]")!.onclick = () => { const output: Record<string, string> = {}; for (const element of elements) output[element.dataset.name!] = element.value.trim(); close(output); };
     document.body.append(overlay);
@@ -121,12 +136,12 @@ function askForm(titleText: string, fields: Array<{ name: string; label: string;
   });
 }
 
-function buildModal(inner: string): { overlay: HTMLDivElement; close: () => void } {
+function buildModal(inner: string, onDismiss?: () => void): { overlay: HTMLDivElement; close: () => void } {
   const overlay = document.createElement("div");
   overlay.className = "modal-backdrop";
   overlay.innerHTML = `<section class="modal confirm-modal entity-modal" role="dialog" aria-modal="true">${inner}</section>`;
   const close = () => overlay.remove();
-  overlay.addEventListener("mousedown", (event) => { if (event.target === overlay) close(); });
+  dismissOnBackdrop(overlay, onDismiss ?? close);
   document.body.append(overlay);
   return { overlay, close };
 }
@@ -162,7 +177,11 @@ function editUserEntity(user: { username: string; email: string; enabled: boolea
 
 function chooseCashReceived(total: number): Promise<string | null> {
   return new Promise((resolve) => {
-    const { overlay, close } = buildModal(`<p class="step-label">Pago en efectivo</p><h2>¿Cuánto recibió?</h2><div class="cash-keypad-display" id="cash-keypad-display">${cashReceived ? money(Number(cashReceived)) : "$ 0"}</div><p class="cash-keypad-total">Total a cobrar: <strong>${money(total)}</strong></p><p class="cash-keypad-error" id="cash-keypad-error"></p><div class="cash-quick-values"><button class="outline" data-cash-quick="10000">$10.000</button><button class="outline" data-cash-quick="20000">$20.000</button><button class="outline" data-cash-quick="50000">$50.000</button><button class="outline" data-cash-quick="100000">$100.000</button></div><div class="cash-keypad"><button data-cash-key="1">1</button><button data-cash-key="2">2</button><button data-cash-key="3">3</button><button data-cash-key="4">4</button><button data-cash-key="5">5</button><button data-cash-key="6">6</button><button data-cash-key="7">7</button><button data-cash-key="8">8</button><button data-cash-key="9">9</button><button class="outline" data-cash-clear>Limpiar</button><button data-cash-key="0">0</button><button class="outline" data-cash-back aria-label="Borrar último dígito">⌫</button></div><div class="confirm-actions"><button class="outline" data-cash-cancel>Cancelar</button><button class="primary" data-cash-confirm>Continuar</button></div>`);
+    let close = () => {};
+    const finish = (result: string | null) => { close(); resolve(result); };
+    const modal = buildModal(`<p class="step-label">Pago en efectivo</p><h2>¿Cuánto recibió?</h2><div class="cash-keypad-display" id="cash-keypad-display">${cashReceived ? money(Number(cashReceived)) : "$ 0"}</div><p class="cash-keypad-total">Total a cobrar: <strong>${money(total)}</strong></p><p class="cash-keypad-error" id="cash-keypad-error"></p><div class="cash-quick-values"><button class="outline" data-cash-quick="10000">$10.000</button><button class="outline" data-cash-quick="20000">$20.000</button><button class="outline" data-cash-quick="50000">$50.000</button><button class="outline" data-cash-quick="100000">$100.000</button></div><div class="cash-keypad"><button data-cash-key="1">1</button><button data-cash-key="2">2</button><button data-cash-key="3">3</button><button data-cash-key="4">4</button><button data-cash-key="5">5</button><button data-cash-key="6">6</button><button data-cash-key="7">7</button><button data-cash-key="8">8</button><button data-cash-key="9">9</button><button class="outline" data-cash-clear>Limpiar</button><button data-cash-key="0">0</button><button class="outline" data-cash-back aria-label="Borrar último dígito">⌫</button></div><div class="confirm-actions"><button class="outline" data-cash-cancel>Cancelar</button><button class="primary" data-cash-confirm>Continuar</button></div>`, () => finish(null));
+    const overlay = modal.overlay;
+    close = modal.close;
     let value = cashReceived;
     const display = overlay.querySelector<HTMLElement>("#cash-keypad-display")!;
     const error = overlay.querySelector<HTMLElement>("#cash-keypad-error")!;
@@ -171,7 +190,6 @@ function chooseCashReceived(total: number): Promise<string | null> {
       display.textContent = value ? money(amount) : "$ 0";
       error.textContent = value && amount < total ? `Faltan ${money(total - amount)} para completar el pago.` : "";
     };
-    const finish = (result: string | null) => { close(); resolve(result); };
     overlay.querySelectorAll<HTMLButtonElement>("[data-cash-key]").forEach((button) => button.onclick = () => { if (value.length < 8) value = `${value}${button.dataset.cashKey}`.replace(/^0+(?=\d)/, ""); render(); });
     overlay.querySelectorAll<HTMLButtonElement>("[data-cash-quick]").forEach((button) => button.onclick = () => { value = button.dataset.cashQuick!; render(); });
     overlay.querySelector<HTMLButtonElement>("[data-cash-clear]")!.onclick = () => { value = ""; render(); };
@@ -199,6 +217,11 @@ async function renderPos(): Promise<void> {
   const flavorModal = posModal === "flavors" && chosenProduct ? `<div class="modal-backdrop"><section class="modal pos-modal" role="dialog" aria-modal="true"><div class="modal-heading"><div><p class="step-label">Paso 2 de 3</p><h2>Elige ${chosenProduct.max_flavors} sabor${chosenProduct.max_flavors > 1 ? "es" : ""}</h2><p>${chosenProduct.presentation} · ${chosenProduct.size} · ${money(chosenProduct.price)}</p></div><button class="modal-close" data-close-modal aria-label="Cancelar selección">×</button></div><div class="flavor-progress"><span>${chosenFlavors.length} de ${chosenProduct.max_flavors} seleccionados</span><div><i style="width:${(chosenFlavors.length / chosenProduct.max_flavors) * 100}%"></i></div></div><div class="grid flavors modal-flavors">${flavorButtons}</div><button class="outline modal-cancel" data-close-modal>Cancelar</button></section></div>` : "";
   const quantityModal = posModal === "quantity" && chosenProduct ? `<div class="modal-backdrop"><section class="modal pos-modal quantity-modal" role="dialog" aria-modal="true"><div class="modal-heading"><div><p class="step-label">Paso 3 de 3</p><h2>¿Cuántos deseas?</h2><p>${chosenProduct.presentation} · ${chosenProduct.size} · ${chosenFlavors.join(", ")}</p></div><button class="modal-close" data-close-modal aria-label="Cancelar selección">×</button></div><div class="quantity-control modal-quantity"><button class="quantity-button" data-quantity-delta="-1" aria-label="Disminuir cantidad">−</button><output id="quantity">1</output><button class="quantity-button" data-quantity-delta="1" aria-label="Aumentar cantidad">+</button></div><button class="primary modal-add" id="add-cart">Agregar al carrito · ${money(chosenProduct.price)}</button><button class="outline modal-cancel" data-back-to-flavors>Volver a sabores</button></section></div>` : "";
   shell(`${title("Registrar venta", "Toca el botón para elegir un producto.")}<div class="pos-screen"><div class="pos"><div class="pos-left"><section class="panel catalog-panel"><div><p class="step-label">Paso 1 de 3</p><h2 class="section-title">Producto</h2><button class="primary catalog-launch" data-open-products>Elegir producto</button></div></section><section class="panel payment-panel"><h2 class="section-title">Método de pago</h2><div class="payment-options">${paymentButtons}</div>${cashSummary}${selectedPayment === "other" ? `<label class="field payment-comment">Comentario para Otro<input id="payment-comment" maxlength="300" placeholder="Describe el método de pago"></label>` : ""}</section></div><aside class="panel cart"><h2 class="section-title">Venta actual</h2><div class="cart-items">${cartItems}</div><div class="total"><span>Total</span><span>${money(total)}</span></div><button class="primary checkout-action" id="confirm-sale" ${!cart.length ? "disabled" : ""}>Confirmar venta</button></aside></div></div>${productModal}${flavorModal}${quantityModal}`, "pos");
+  document.querySelector<HTMLDivElement>(".pos-page .modal-backdrop")?.addEventListener("click", (event) => {
+    if (event.target !== event.currentTarget) return;
+    posModal = null; chosenProduct = null; chosenFlavors = [];
+    renderPos().catch(showError);
+  });
   document.querySelector<HTMLButtonElement>("[data-open-products]")?.addEventListener("click", () => { posModal = "products"; renderPos().catch(showError); });
   document.querySelectorAll<HTMLButtonElement>("[data-product]").forEach((button) => button.onclick = () => { chosenProduct = products.find((p) => p.id === button.dataset.product)!; chosenFlavors = []; posModal = "flavors"; renderPos().catch(showError); });
   document.querySelectorAll<HTMLButtonElement>("[data-flavor]").forEach((button) => button.onclick = () => { const flavor = button.dataset.flavor!; if (chosenFlavors.length < (chosenProduct?.max_flavors ?? 0)) chosenFlavors = [...chosenFlavors, flavor]; if (chosenProduct && chosenFlavors.length === chosenProduct.max_flavors) posModal = "quantity"; renderPos().catch(showError); });
@@ -250,7 +273,7 @@ async function confirmSale(): Promise<void> {
 }
 
 function salesRows(sales: Sale[]): string {
-  return sales.length ? sales.map((sale, index) => `<tr class="${sale.status === "cancelled" ? "row-cancelled" : ""}"><td data-label="Fecha">${new Date(sale.created_at).toLocaleString("es-CO")}</td><td data-label="Vendedor">${capitalize(sale.seller.username)}</td><td data-label="Productos">${sale.items.map((item) => `${item.presentation} ${item.size}`).join(", ")}</td><td data-label="Total">${money(sale.total_sale)}</td><td data-label="Estado"><span class="status ${sale.status === "cancelled" ? "cancelled" : ""}">${sale.status === "cancelled" ? "Anulada" : "Activa"}</span></td><td class="sale-row-actions"><button class="outline" data-receipt="${index}">Tiquete</button>${sale.status === "active" && has("sales") && !roles().includes("observer") ? `<button class="outline icon-btn" data-cancel="${sale.created_at}" title="Anular venta" aria-label="Anular venta">×</button>` : ""}</td></tr>`).join("") : `<tr><td colspan="6" class="empty">No hay ventas en el rango seleccionado.</td></tr>`;
+  return sales.length ? sales.map((sale, index) => `<tr class="${sale.status === "cancelled" ? "row-cancelled" : ""}"><td data-label="Fecha">${new Date(sale.created_at).toLocaleString("es-CO")}</td><td data-label="Vendedor">${capitalize(sale.seller.username)}</td><td data-label="Productos">${sale.items.map((item) => `${item.presentation} ${item.size}`).join(", ")}</td><td data-label="Total">${money(sale.total_sale)}</td><td data-label="Estado"><span class="status ${sale.status === "cancelled" ? "cancelled" : ""}">${sale.status === "cancelled" ? "Anulada" : "Activa"}</span></td><td class="sale-row-actions"><div class="sale-actions"><button class="outline" data-receipt="${index}">Tiquete</button>${sale.status === "active" && has("sales") && !roles().includes("observer") ? `<button class="outline icon-btn" data-cancel="${sale.created_at}" title="Anular venta" aria-label="Anular venta">×</button>` : ""}</div></td></tr>`).join("") : `<tr><td colspan="6" class="empty">No hay ventas en el rango seleccionado.</td></tr>`;
 }
 
 function exportSalesCsv(sales: Sale[], from: string, to: string): void {
@@ -290,7 +313,8 @@ function showShiftClosure(date: string, sales: Sale[]): void {
 }
 
 async function paintSales(sales: Sale[], start: string, end: string): Promise<void> {
-  shell(`${title("Listado de ventas", "Consulta hasta 30 días de ventas. Las anuladas permanecen visibles.")}<div class="panel"><div class="actions" style="margin-bottom:18px"><label class="field">Desde<input id="sales-start" type="date" value="${start}"></label><label class="field">Hasta<input id="sales-end" type="date" value="${end}"></label><button class="secondary" id="search-sales">Consultar</button><button class="outline" id="export-sales" ${sales.length ? "" : "disabled"}>Exportar</button><button class="primary" id="shift-closure">Cierre de turno</button></div><table class="table"><thead><tr><th>Fecha</th><th>Vendedor</th><th>Productos</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>${salesRows(sales)}</tbody></table></div>`, "sales");
+  shell(`${title("Transacciones", "Consulta las ventas y los gastos desde un mismo lugar.")}<div class="expense-tabs" role="tablist"><button type="button" role="tab" aria-selected="true" class="active">Ventas</button><button type="button" role="tab" aria-selected="false" id="transactions-expenses">Gastos</button></div><div class="panel"><div class="actions" style="margin-bottom:18px"><label class="field">Desde<input id="sales-start" type="date" value="${start}"></label><label class="field">Hasta<input id="sales-end" type="date" value="${end}"></label><button class="secondary" id="search-sales">Consultar</button><button class="outline" id="export-sales" ${sales.length ? "" : "disabled"}>Exportar</button><button class="primary" id="shift-closure">Cierre de turno</button></div><table class="table"><thead><tr><th>Fecha</th><th>Vendedor</th><th>Productos</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>${salesRows(sales)}</tbody></table></div>`, "sales");
+  document.querySelector<HTMLButtonElement>("#transactions-expenses")!.onclick = () => { transactionsSection = "expenses"; renderSales().catch(showError); };
   document.querySelectorAll<HTMLButtonElement>("[data-receipt]").forEach(button => button.onclick = () => showReceipt(sales[Number(button.dataset.receipt)], { canPrint: has("pos") }));
   const range = () => ({ from: document.querySelector<HTMLInputElement>("#sales-start")!.value, to: document.querySelector<HTMLInputElement>("#sales-end")!.value });
   document.querySelector<HTMLButtonElement>("#search-sales")?.addEventListener("click", async () => { const { from, to } = range(); if (!from || !to) return; await paintSales(await api.sales(from, to, true), from, to); });
@@ -300,19 +324,55 @@ async function paintSales(sales: Sale[], start: string, end: string): Promise<vo
 }
 
 async function renderSales(): Promise<void> {
+  if (transactionsSection === "expenses") { await renderExpenseTransactions(shell, money, today, () => { transactionsSection = "sales"; renderSales().catch(showError); }); return; }
   const start = today();
   await paintSales(await api.sales(start, start, true), start, start);
 }
 
 const scoops = (value: number) => `${value} bola${value === 1 ? "" : "s"}`;
-function breakdown(titleText: string, values: Record<string, number>, format: (key: string) => string = (key) => key, formatValue: (value: number) => string = money): string { return `<div class="panel"><h2 class="section-title">${titleText}</h2><ul>${Object.entries(values).sort((a, b) => b[1] - a[1]).map(([name, value]) => `<li><span>${format(name)}</span><strong>${formatValue(value)}</strong></li>`).join("") || "<li>Sin datos</li>"}</ul></div>`; }
 async function renderMetrics(): Promise<void> {
-  const end = today(); const start = bogotaDate(-6);
-  const data: Metrics = await api.metrics(start, end);
-  shell(`${title("Métricas", `${start} a ${end} · ventas netas, sin anulaciones.`)}<section class="metrics"><div class="metric"><span>Ventas netas</span><b>${money(data.net_sales)}</b></div><div class="metric"><span>Número de ventas</span><b>${data.sale_count}</b></div><div class="metric"><span>Promedio por venta</span><b>${money(data.sale_count ? Math.round(data.net_sales / data.sale_count) : 0)}</b></div><div class="metric"><span>Días con ventas</span><b>${Object.keys(data.daily).length}</b></div></section><section class="breakdown">${breakdown("Por método de pago", data.payment_types, (key) => paymentLabels[key] ?? key)}${breakdown("Por producto", data.products)}${breakdown("Por vendedor", data.sellers, capitalize)}${breakdown("Por sabor", data.flavors, (key) => key, scoops)}</section>`, "metrics");
+  const end = today(); const start = `${end.slice(0, 7)}-01`;
+  const sixMonthDate = new Date(`${start}T12:00:00Z`);
+  sixMonthDate.setUTCMonth(sixMonthDate.getUTCMonth() - 5);
+  const sixMonthStart = sixMonthDate.toISOString().slice(0, 10);
+  const [data, expenseHistory]: [Metrics, Awaited<ReturnType<typeof api.expenses>>] = await Promise.all([api.metrics(start, end), api.expenses(sixMonthStart, end)]);
+  const netExpenses = expenseHistory.items.filter((expense) => expense.expense_date >= start).reduce((sum, expense) => sum + expense.amount, 0);
+  const balance = data.net_sales - netExpenses;
+  const goal = netExpenses ? `${new Intl.NumberFormat("es-CO", { maximumFractionDigits: 1 }).format(data.net_sales / netExpenses * 100)} %` : "—";
+  const month = new Intl.DateTimeFormat("es-CO", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${start}T12:00:00Z`));
+  const monthLabel = month.charAt(0).toUpperCase() + month.slice(1);
+  shell(`${title("Métricas", `${monthLabel} · ventas y gastos del 1 al ${Number(end.slice(8))}.`)}<section class="metrics" aria-label="Ventas del mes"><div class="metric"><span>Ventas netas</span><b>${money(data.net_sales)}</b></div><div class="metric"><span>Número de ventas</span><b>${data.sale_count}</b></div><div class="metric"><span>Promedio por venta</span><b>${money(data.sale_count ? Math.round(data.net_sales / data.sale_count) : 0)}</b></div></section><section class="metrics metrics-secondary" aria-label="Gastos y balance del mes"><div class="metric"><span>Gastos netos</span><b>${money(netExpenses)}</b></div><div class="metric"><span>Balance</span><b>${money(balance)}</b></div><div class="metric" title="Ventas netas ÷ gastos netos × 100"><span>Meta</span><b>${goal}</b></div></section>${renderWeeklyChart(start, end, data.daily, money)}${renderPaymentStack(data.payment_types, paymentLabels, money)}<section class="metrics-treemap-grid">${renderTreemap("Por producto", data.products, money, "Tamaño según ventas en COP")}${renderTreemap("Por sabor", data.flavors, scoops, "Tamaño según bolas vendidas")}</section>${renderHourlySalesChart(data.hourly, money)}${renderExpenseCategoryChart(expenseHistory.items, end, money)}`, "metrics");
+  const tooltip = document.querySelector<HTMLDivElement>("#metrics-point-popover")!;
+  const controller = new AbortController();
+  metricsTooltipAbort = controller;
+  const hideTooltip = () => { tooltip.hidden = true; };
+  const showTooltip = (point: SVGGElement) => {
+    tooltip.querySelector("strong")!.textContent = point.getAttribute("data-label") ?? "";
+    tooltip.querySelector("span")!.textContent = point.getAttribute("data-value") ?? "";
+    tooltip.hidden = false;
+    const marker = (point.querySelector("[data-tooltip-anchor]") ?? point).getBoundingClientRect();
+    const width = tooltip.offsetWidth, height = tooltip.offsetHeight;
+    tooltip.style.left = `${Math.max(8, Math.min(document.documentElement.clientWidth - width - 8, marker.left + marker.width / 2 - width / 2))}px`;
+    tooltip.style.top = `${marker.top - height - 10 >= 8 ? marker.top - height - 10 : marker.bottom + 10}px`;
+  };
+  document.querySelectorAll<SVGGElement>(".metrics-data-point").forEach((point) => {
+    point.addEventListener("pointerenter", () => showTooltip(point), { signal: controller.signal });
+    point.addEventListener("pointerleave", hideTooltip, { signal: controller.signal });
+    point.addEventListener("focus", () => showTooltip(point), { signal: controller.signal });
+    point.addEventListener("blur", hideTooltip, { signal: controller.signal });
+    point.addEventListener("click", () => showTooltip(point), { signal: controller.signal });
+  });
+  document.addEventListener("pointerdown", (event) => { if (!(event.target as Element).closest(".metrics-data-point")) hideTooltip(); }, { signal: controller.signal });
+  window.addEventListener("scroll", () => {
+    const focused = document.activeElement;
+    if (focused instanceof SVGGElement && focused.classList.contains("metrics-data-point")) showTooltip(focused);
+    else hideTooltip();
+  }, { signal: controller.signal, capture: true });
+  window.addEventListener("resize", hideTooltip, { signal: controller.signal });
 }
 
 async function renderSettings(): Promise<void> {
+  if (settingsSection === "expenses") { await renderExpenseSettings(shell, money, { products: () => { settingsSection = "products"; renderSettings().catch(showError); }, users: () => { settingsSection = "users"; renderSettings().catch(showError); } }); return; }
   const [productList, flavorList, userList] = await Promise.all([api.products(), api.flavors(), api.users()]);
   const end = today();
   const start = bogotaDate(-29);
@@ -329,23 +389,26 @@ async function renderSettings(): Promise<void> {
   const productRows = orderedProducts.map((product) => `<button class="config-item" data-product="${product.id}"><span class="config-item-main"><span class="config-item-title">${product.presentation} · ${product.size}</span><span class="config-item-sub">${product.max_flavors} sabor${product.max_flavors > 1 ? "es" : ""} · ${money(product.price)}</span></span><span class="config-chevron">›</span></button>`).join("") || `<div class="empty">Sin productos.</div>`;
   const userRows = userList.map((user) => `<button class="config-item" data-user="${user.username}"><span class="config-item-main"><span class="config-item-title">${capitalize(user.username)}</span><span class="config-item-sub">${user.email} · ${user.enabled ? "Activo" : "Inactivo"}</span></span><span class="config-chevron">›</span></button>`).join("") || `<div class="empty">Sin usuarios.</div>`;
 
-  shell(`${title("Configuración", "Toca una fila para ver el detalle y editarlo.")}<section class="breakdown config-grid"><div class="panel config-panel"><div class="config-head"><h2 class="section-title">Sabores</h2><button class="secondary config-add" id="add-flavor" title="Nuevo sabor" aria-label="Nuevo sabor">+</button></div><div class="config-list">${flavorRows}</div></div><div class="panel config-panel"><div class="config-head"><h2 class="section-title">Productos</h2><button class="secondary config-add" id="add-product" title="Nuevo producto" aria-label="Nuevo producto">+</button></div><div class="config-list">${productRows}</div></div><div class="panel config-panel"><div class="config-head"><h2 class="section-title">Usuarios</h2><button class="secondary config-add" id="add-user" title="Nuevo usuario" aria-label="Nuevo usuario">+</button></div><div class="config-list">${userRows}</div></div></section>`, "settings");
+  const productsPanels = `<section class="breakdown config-grid"><div class="panel config-panel"><div class="config-head"><h2 class="section-title">Sabores</h2><button class="secondary config-add" id="add-flavor" title="Nuevo sabor" aria-label="Nuevo sabor">+</button></div><div class="config-list">${flavorRows}</div></div><div class="panel config-panel"><div class="config-head"><h2 class="section-title">Productos</h2><button class="secondary config-add" id="add-product" title="Nuevo producto" aria-label="Nuevo producto">+</button></div><div class="config-list">${productRows}</div></div></section>`;
+  const usersPanel = `<section class="breakdown config-grid"><div class="panel config-panel"><div class="config-head"><h2 class="section-title">Usuarios</h2><button class="secondary config-add" id="add-user" title="Nuevo usuario" aria-label="Nuevo usuario">+</button></div><div class="config-list">${userRows}</div></div></section>`;
+  shell(`${title("Configuración", "Administra el catálogo, los usuarios y los gastos.")}<div class="expense-tabs" role="tablist"><button type="button" role="tab" aria-selected="${settingsSection === "products"}" class="${settingsSection === "products" ? "active" : ""}" data-settings-tab="products">Productos</button><button type="button" role="tab" aria-selected="${settingsSection === "users"}" class="${settingsSection === "users" ? "active" : ""}" data-settings-tab="users">Usuarios</button><button type="button" role="tab" aria-selected="false" data-settings-tab="expenses">Gastos</button></div>${settingsSection === "products" ? productsPanels : usersPanel}`, "settings");
+  document.querySelectorAll<HTMLButtonElement>("[data-settings-tab]").forEach((button) => button.onclick = () => { settingsSection = button.dataset.settingsTab as typeof settingsSection; renderSettings().catch(showError); });
 
-  document.querySelector<HTMLButtonElement>("#add-flavor")!.onclick = async () => { const name = await askText("Nuevo sabor", "Nombre del sabor", { confirmText: "Agregar" }); if (name) { await api.createFlavor(name); await renderSettings(); } };
-  document.querySelector<HTMLButtonElement>("#add-product")!.onclick = async () => {
+  document.querySelector<HTMLButtonElement>("#add-flavor")?.addEventListener("click", async () => { const name = await askText("Nuevo sabor", "Nombre del sabor", { confirmText: "Agregar" }); if (name) { await api.createFlavor(name); await renderSettings(); } });
+  document.querySelector<HTMLButtonElement>("#add-product")?.addEventListener("click", async () => {
     const result = await askForm("Nuevo producto", [{ name: "presentation", label: "Presentación" }, { name: "size", label: "Tamaño" }, { name: "max_flavors", label: "Máx. sabores", value: "1", type: "number", min: 1, max: 6 }, { name: "price", label: "Precio COP", type: "number", min: 0 }], "Agregar");
     if (!result) return;
     const max_flavors = Number(result.max_flavors); const price = Number(result.price);
     if (!result.presentation || !result.size || !Number.isInteger(max_flavors) || !Number.isInteger(price)) { await notify("Datos incompletos", "Completa todos los campos del producto."); return; }
     await api.createProduct({ presentation: result.presentation, size: result.size, max_flavors, price }); await renderSettings();
-  };
-  document.querySelector<HTMLButtonElement>("#add-user")!.onclick = async () => {
+  });
+  document.querySelector<HTMLButtonElement>("#add-user")?.addEventListener("click", async () => {
     const result = await askForm("Nuevo usuario", [{ name: "username", label: "Usuario" }, { name: "email", label: "Correo", type: "email" }, { name: "role", label: "Perfil", type: "select", value: "seller", options: [["seller", "Vendedor"], ["manager", "Manager"], ["observer", "Observador"], ["admin", "Admin"]] }], "Crear");
     if (!result) return;
     if (!result.username || !result.email) { await notify("Datos incompletos", "Completa el usuario y el correo."); return; }
     await api.createUser({ username: result.username, email: result.email, role: result.role });
     await notify("Usuario creado", "Cognito enviará la contraseña temporal por correo."); await renderSettings();
-  };
+  });
 
   document.querySelectorAll<HTMLButtonElement>("[data-flavor]").forEach((button) => button.onclick = () => { const flavor = flavorList.find((item) => item.id === button.dataset.flavor)!; editFlavorEntity(flavor, flavorUse(flavor.name)); });
   document.querySelectorAll<HTMLButtonElement>("[data-product]").forEach((button) => button.onclick = () => { const product = productList.find((item) => item.id === button.dataset.product)!; editProductEntity(product, productUse(product)); });
@@ -354,9 +417,11 @@ async function renderSettings(): Promise<void> {
 
 async function render(): Promise<void> {
   const page = route();
-  if (!has(page)) { location.hash = has("pos") ? "#/pos" : "#/sales"; return; }
+  if (!has(page)) { location.hash = expensePreview ? "#/expenses" : has("pos") ? "#/pos" : "#/sales"; return; }
   try {
+    if (expensePreview) { if (page === "settings") renderExpenseSettingsPreview(shell, money, today); else if (page === "sales") renderTransactionsPreview(shell, money, today); else renderExpensesPreview(shell, money, today); return; }
     if (page === "pos") await renderPos();
+    if (page === "expenses") await renderExpenseRegistration(shell, money, today);
     if (page === "sales") await renderSales();
     if (page === "metrics") await renderMetrics();
     if (page === "settings") await renderSettings();
@@ -364,6 +429,7 @@ async function render(): Promise<void> {
 }
 
 async function bootstrap(): Promise<void> {
+  if (expensePreview) { await render(); return; }
   if (!authConfigured) {
     app.innerHTML = `<div class="login"><div class="login-card"><div class="brand">alaska<small>Helados · ERP</small></div><p>La interfaz está lista, pero aún no tiene configurado un entorno Cognito/API. Crea <code>.env.local</code> a partir de <code>.env.example</code> y completa las variables del entorno dev cuando se despliegue.</p><div class="notice">Para verla localmente usa <strong>http://127.0.0.1:5173/</strong>, no abras <code>index.html</code> con <code>file://</code>.</div></div></div>`;
     return;
