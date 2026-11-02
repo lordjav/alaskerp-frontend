@@ -315,6 +315,9 @@ button:disabled:hover, button:disabled:active { transform: none; }
 @media (max-width:700px) { .expense-heading { align-items:flex-start; flex-direction:column; }.expense-heading h1 { font-size:30px; }.expense-heading .outline { min-height:46px; }.expense-preview-banner { align-items:flex-start; flex-direction:column; gap:4px; }.expense-form-panel { padding:20px; }.expense-register-head { flex-direction:column; gap:18px; }.expense-register-head h1 { font-size:36px; }.expense-quick, .expense-quick-toggle { width:100%; }.expense-quick-menu { left:0; right:auto; width:100%; }.expense-form-grid { grid-template-columns:1fr; }.expense-section-head { align-items:flex-start; flex-direction:column; }.expense-editor { padding:20px; }.expense-editor-actions { flex-wrap:wrap; }.expense-editor-actions button { flex:1; }.expense-tabs { width:100%; }.expense-tabs button { flex:1; min-width:0; padding:0 10px; }.expense-transaction-summary { align-items:flex-start; flex-wrap:wrap; }.expense-transaction-summary strong { margin-left:0; width:100%; } }
 
 /* Monthly sales charts */
+.metrics-month-nav { display:flex; align-items:center; gap:10px; white-space:nowrap; }
+.metrics-month-nav span { min-width:170px; text-align:center; font-size:18px; font-weight:800; }
+.metrics-month-arrow { width:46px; min-width:46px; height:46px; min-height:46px; padding:0; font-size:30px; line-height:1; }
 .metrics-main-chart, .metrics-payment-chart { margin-top:18px; }
 .metrics-chart-heading { display:flex; justify-content:space-between; gap:16px; margin-bottom:18px; }
 .metrics-chart-heading h2, .metrics-payment-chart > h2, .metrics-treemap-panel > h2 { margin:0; font-size:22px; }
@@ -366,3 +369,4 @@ button:disabled:hover, button:disabled:active { transform: none; }
 @media (max-width:1050px) { .metrics-treemap-grid { grid-template-columns:1fr; } }
 @media (max-width:900px) { .shell { grid-template-columns:minmax(0,1fr); }.page { min-width:0; } }
 @media (max-width:700px) { .metrics { grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }.metrics .metric, .metrics-secondary .metric { min-height:98px; padding:10px; border-radius:14px; }.metrics .metric > span { font-size:clamp(10px,2.5vw,13px); line-height:1.2; }.metrics .metric b, .metrics-secondary .metric b { margin-top:10px; font-size:clamp(11px,3.1vw,20px); white-space:nowrap; overflow-wrap:normal; }.metrics-treemap { height:330px; }.metrics-payment-legend { grid-template-columns:1fr; }.metrics-week-key { flex-wrap:wrap; } }
+@media (max-width:700px) { .metrics-month-nav { width:100%; justify-content:space-between; }.metrics-month-nav span { min-width:0; flex:1; } }

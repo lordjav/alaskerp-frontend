@@ -7,6 +7,7 @@ import type { CartItem, Flavor, Metrics, Page, Product, Role, Sale } from "./mod
 import { renderExpensesPreview, renderExpenseSettingsPreview, renderTransactionsPreview } from "./expenses-preview";
 import { renderExpenseRegistration, renderExpenseSettings, renderExpenseTransactions } from "./expenses";
 import { renderExpenseCategoryChart, renderHourlySalesChart, renderPaymentStack, renderTreemap, renderWeeklyChart } from "./components/metrics-charts";
+import { metricsPeriod, shiftMonth } from "./components/metrics-period";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 let products: Product[] = [];
@@ -23,6 +24,7 @@ let posModal: "products" | "flavors" | "quantity" | null = null;
 let transactionsSection: "sales" | "expenses" = "sales";
 let settingsSection: "products" | "users" | "expenses" = "products";
 let metricsTooltipAbort: AbortController | null = null;
+let metricsMonth: string | null = null;
 
 const expensePreview = import.meta.env.DEV && new URLSearchParams(location.search).get("preview") === "expenses";
 const labels: Record<Page, string> = { pos: "Registrar venta", expenses: "Registrar gasto", sales: "Transacciones", metrics: "Métricas", settings: "Configuración" };
@@ -331,17 +333,31 @@ async function renderSales(): Promise<void> {
 
 const scoops = (value: number) => `${value} bola${value === 1 ? "" : "s"}`;
 async function renderMetrics(): Promise<void> {
-  const end = today(); const start = `${end.slice(0, 7)}-01`;
-  const sixMonthDate = new Date(`${start}T12:00:00Z`);
-  sixMonthDate.setUTCMonth(sixMonthDate.getUTCMonth() - 5);
-  const sixMonthStart = sixMonthDate.toISOString().slice(0, 10);
-  const [data, expenseHistory]: [Metrics, Awaited<ReturnType<typeof api.expenses>>] = await Promise.all([api.metrics(start, end), api.expenses(sixMonthStart, end)]);
-  const netExpenses = expenseHistory.items.filter((expense) => expense.expense_date >= start).reduce((sum, expense) => sum + expense.amount, 0);
+  const currentDate = today();
+  const selectedMonth = metricsMonth ?? currentDate.slice(0, 7);
+  metricsMonth = selectedMonth;
+  const { start, end, historyStart, historyEnd } = metricsPeriod(selectedMonth, currentDate);
+  const [data, expenseHistory, olderExpenses]: [Metrics, Awaited<ReturnType<typeof api.expenses>>, Awaited<ReturnType<typeof api.expenses>> | null] = await Promise.all([
+    api.metrics(start, end), api.expenses(historyStart, historyEnd),
+    start < historyStart ? api.expenses(start, end) : Promise.resolve(null),
+  ]);
+  if (route() !== "metrics") return;
+  const netExpenses = (olderExpenses?.items ?? expenseHistory.items)
+    .filter((expense) => expense.expense_date >= start && expense.expense_date <= end)
+    .reduce((sum, expense) => sum + expense.amount, 0);
   const balance = data.net_sales - netExpenses;
   const goal = netExpenses ? `${new Intl.NumberFormat("es-CO", { maximumFractionDigits: 1 }).format(data.net_sales / netExpenses * 100)} %` : "—";
   const month = new Intl.DateTimeFormat("es-CO", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${start}T12:00:00Z`));
   const monthLabel = month.charAt(0).toUpperCase() + month.slice(1);
-  shell(`${title("Métricas", `${monthLabel} · ventas y gastos del 1 al ${Number(end.slice(8))}.`)}<section class="metrics" aria-label="Ventas del mes"><div class="metric"><span>Ventas netas</span><b>${money(data.net_sales)}</b></div><div class="metric"><span>Número de ventas</span><b>${data.sale_count}</b></div><div class="metric"><span>Promedio por venta</span><b>${money(data.sale_count ? Math.round(data.net_sales / data.sale_count) : 0)}</b></div></section><section class="metrics metrics-secondary" aria-label="Gastos y balance del mes"><div class="metric"><span>Gastos netos</span><b>${money(netExpenses)}</b></div><div class="metric"><span>Balance</span><b>${money(balance)}</b></div><div class="metric" title="Ventas netas ÷ gastos netos × 100"><span>Meta</span><b>${goal}</b></div></section>${renderWeeklyChart(start, end, data.daily, money)}${renderPaymentStack(data.payment_types, paymentLabels, money)}<section class="metrics-treemap-grid">${renderTreemap("Por producto", data.products, money, "Tamaño según ventas en COP")}${renderTreemap("Por sabor", data.flavors, scoops, "Tamaño según bolas vendidas")}</section>${renderHourlySalesChart(data.hourly, money)}${renderExpenseCategoryChart(expenseHistory.items, end, money)}`, "metrics");
+  const monthNavigation = `<div class="metrics-month-nav" role="group" aria-label="Seleccionar mes de métricas"><button type="button" class="outline metrics-month-arrow" data-metrics-prev aria-label="Mes anterior" title="Mes anterior">‹</button><span aria-live="polite">${monthLabel}</span><button type="button" class="outline metrics-month-arrow" data-metrics-next aria-label="Mes siguiente" title="Mes siguiente" ${selectedMonth >= currentDate.slice(0, 7) ? "disabled" : ""}>›</button></div>`;
+  shell(`${title("Métricas", `Ventas y gastos del 1 al ${Number(end.slice(8))} · importes en COP.`, monthNavigation)}<section class="metrics" aria-label="Ventas del mes"><div class="metric"><span>Ventas netas</span><b>${money(data.net_sales)}</b></div><div class="metric"><span>Número de ventas</span><b>${data.sale_count}</b></div><div class="metric"><span>Promedio por venta</span><b>${money(data.sale_count ? Math.round(data.net_sales / data.sale_count) : 0)}</b></div></section><section class="metrics metrics-secondary" aria-label="Gastos y balance del mes"><div class="metric"><span>Gastos netos</span><b>${money(netExpenses)}</b></div><div class="metric"><span>Balance</span><b>${money(balance)}</b></div><div class="metric" title="Ventas netas ÷ gastos netos × 100"><span>Meta</span><b>${goal}</b></div></section>${renderWeeklyChart(start, end, data.daily, money, selectedMonth === currentDate.slice(0, 7))}${renderPaymentStack(data.payment_types, paymentLabels, money)}<section class="metrics-treemap-grid">${renderTreemap("Por producto", data.products, money, "Tamaño según ventas en COP")}${renderTreemap("Por sabor", data.flavors, scoops, "Tamaño según bolas vendidas")}</section>${renderHourlySalesChart(data.hourly, money)}${renderExpenseCategoryChart(expenseHistory.items, historyEnd, money)}`, "metrics");
+  const changeMonth = (offset: number) => {
+    document.querySelectorAll<HTMLButtonElement>(".metrics-month-arrow").forEach((button) => { button.disabled = true; });
+    metricsMonth = shiftMonth(selectedMonth, offset);
+    renderMetrics().catch(showError);
+  };
+  document.querySelector<HTMLButtonElement>("[data-metrics-prev]")!.onclick = () => changeMonth(-1);
+  document.querySelector<HTMLButtonElement>("[data-metrics-next]")!.onclick = () => changeMonth(1);
   const tooltip = document.querySelector<HTMLDivElement>("#metrics-point-popover")!;
   const controller = new AbortController();
   metricsTooltipAbort = controller;
