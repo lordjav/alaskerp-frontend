@@ -40,7 +40,7 @@ function axisStep(maximum: number): number {
   return [1, 2, 5, 10].map((factor) => factor * base).find((step) => step >= target) ?? 10 * base;
 }
 
-export function renderWeeklyChart(start: string, end: string, daily: Metrics["daily"], money: Money): string {
+export function renderWeeklyChart(start: string, end: string, daily: Metrics["daily"], money: Money, currentMonth = true): string {
   const weeks = weeklySeries(start, end, daily);
   const highest = Math.max(0, ...weeks.flatMap((week) => week.points.map((point) => point?.value ?? 0)));
   const content = highest ? (() => {
@@ -74,7 +74,7 @@ export function renderWeeklyChart(start: string, end: string, daily: Metrics["da
     const last = Number(days.at(-1)?.date.slice(8) ?? 0);
     return `<span class="metrics-week-key"><i style="background:${week.color}"></i><b>${week.label}</b><small>${first}${first === last ? "" : `–${last}`} · ${money(week.total)}</small></span>`;
   }).join("");
-  return `<section class="panel metrics-main-chart"><div class="metrics-chart-heading"><div><h2>Ventas diarias por semana</h2><p>Cada línea representa una semana del mes; la semana actual llega hasta hoy.</p></div></div>${content}<div class="metrics-week-legend">${legend}</div><div class="metrics-point-popover" id="metrics-point-popover" role="tooltip" hidden><strong></strong><span></span></div></section>`;
+  return `<section class="panel metrics-main-chart"><div class="metrics-chart-heading"><div><h2>Ventas diarias por semana</h2><p>Cada línea representa una semana del mes; ${currentMonth ? "la semana actual llega hasta hoy" : "se muestra el mes completo"}.</p></div></div>${content}<div class="metrics-week-legend">${legend}</div><div class="metrics-point-popover" id="metrics-point-popover" role="tooltip" hidden><strong></strong><span></span></div></section>`;
 }
 
 export function renderHourlySalesChart(hourly: Metrics["hourly"], money: Money): string {
