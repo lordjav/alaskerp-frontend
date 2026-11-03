@@ -6,7 +6,7 @@ import { authConfigured } from "./services/config";
 import type { CartItem, Flavor, Metrics, Page, Product, Role, Sale } from "./models";
 import { renderExpensesPreview, renderExpenseSettingsPreview, renderTransactionsPreview } from "./expenses-preview";
 import { renderExpenseRegistration, renderExpenseSettings, renderExpenseTransactions } from "./expenses";
-import { renderExpenseCategoryChart, renderHourlySalesChart, renderPaymentStack, renderTreemap, renderWeeklyChart } from "./components/metrics-charts";
+import { chartFlavors, renderExpenseCategoryChart, renderHourlySalesChart, renderPaymentStack, renderTreemap, renderWeeklyChart } from "./components/metrics-charts";
 import { metricsPeriod, shiftMonth } from "./components/metrics-period";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -350,7 +350,7 @@ async function renderMetrics(): Promise<void> {
   const month = new Intl.DateTimeFormat("es-CO", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${start}T12:00:00Z`));
   const monthLabel = month.charAt(0).toUpperCase() + month.slice(1);
   const monthNavigation = `<div class="metrics-month-nav" role="group" aria-label="Seleccionar mes de métricas"><button type="button" class="outline metrics-month-arrow" data-metrics-prev aria-label="Mes anterior" title="Mes anterior">‹</button><span aria-live="polite">${monthLabel}</span><button type="button" class="outline metrics-month-arrow" data-metrics-next aria-label="Mes siguiente" title="Mes siguiente" ${selectedMonth >= currentDate.slice(0, 7) ? "disabled" : ""}>›</button></div>`;
-  shell(`${title("Métricas", `Ventas y gastos del 1 al ${Number(end.slice(8))} · importes en COP.`, monthNavigation)}<section class="metrics" aria-label="Ventas del mes"><div class="metric"><span>Ventas netas</span><b>${money(data.net_sales)}</b></div><div class="metric"><span>Número de ventas</span><b>${data.sale_count}</b></div><div class="metric"><span>Promedio por venta</span><b>${money(data.sale_count ? Math.round(data.net_sales / data.sale_count) : 0)}</b></div></section><section class="metrics metrics-secondary" aria-label="Gastos y balance del mes"><div class="metric"><span>Gastos netos</span><b>${money(netExpenses)}</b></div><div class="metric"><span>Balance</span><b>${money(balance)}</b></div><div class="metric" title="Ventas netas ÷ gastos netos × 100"><span>Meta</span><b>${goal}</b></div></section>${renderWeeklyChart(start, end, data.daily, money, selectedMonth === currentDate.slice(0, 7))}${renderPaymentStack(data.payment_types, paymentLabels, money)}<section class="metrics-treemap-grid">${renderTreemap("Por producto", data.products, money, "Tamaño según ventas en COP")}${renderTreemap("Por sabor", data.flavors, scoops, "Tamaño según bolas vendidas")}</section>${renderHourlySalesChart(data.hourly, money)}${renderExpenseCategoryChart(expenseHistory.items, historyEnd, money)}`, "metrics");
+  shell(`${title("Métricas", `Ventas y gastos del 1 al ${Number(end.slice(8))} · importes en COP.`, monthNavigation)}<section class="metrics" aria-label="Ventas del mes"><div class="metric"><span>Ventas netas</span><b>${money(data.net_sales)}</b></div><div class="metric"><span>Número de ventas</span><b>${data.sale_count}</b></div><div class="metric"><span>Promedio por venta</span><b>${money(data.sale_count ? Math.round(data.net_sales / data.sale_count) : 0)}</b></div></section><section class="metrics metrics-secondary" aria-label="Gastos y balance del mes"><div class="metric"><span>Gastos netos</span><b>${money(netExpenses)}</b></div><div class="metric"><span>Balance</span><b>${money(balance)}</b></div><div class="metric" title="Ventas netas ÷ gastos netos × 100"><span>Meta</span><b>${goal}</b></div></section>${renderWeeklyChart(start, end, data.daily, money, selectedMonth === currentDate.slice(0, 7))}${renderPaymentStack(data.payment_types, paymentLabels, money)}<section class="metrics-treemap-grid">${renderTreemap("Por producto", data.products, money, "Tamaño según ventas en COP")}${renderTreemap("Por sabor", chartFlavors(data.flavors), scoops, "Tamaño según bolas vendidas")}</section>${renderHourlySalesChart(data.hourly, money)}${renderExpenseCategoryChart(expenseHistory.items, historyEnd, money)}`, "metrics");
   const changeMonth = (offset: number) => {
     document.querySelectorAll<HTMLButtonElement>(".metrics-month-arrow").forEach((button) => { button.disabled = true; });
     metricsMonth = shiftMonth(selectedMonth, offset);
@@ -365,11 +365,34 @@ async function renderMetrics(): Promise<void> {
   const showTooltip = (point: SVGGElement) => {
     tooltip.querySelector("strong")!.textContent = point.getAttribute("data-label") ?? "";
     tooltip.querySelector("span")!.textContent = point.getAttribute("data-value") ?? "";
+    const breakdown = tooltip.querySelector<HTMLDivElement>(".metrics-tooltip-breakdown")!;
+    breakdown.replaceChildren();
+    const raw = point.getAttribute("data-breakdown");
+    tooltip.classList.toggle("has-breakdown", raw !== null);
+    breakdown.hidden = raw === null;
+    if (raw !== null) {
+      const details = JSON.parse(raw) as Array<{ name: string; amount: string; percent: string; color: string }>;
+      for (const item of details) {
+        const row = document.createElement("div");
+        row.className = "metrics-tooltip-row";
+        const swatch = document.createElement("i");
+        swatch.style.background = item.color;
+        const name = document.createElement("span");
+        name.textContent = item.name;
+        const amount = document.createElement("b");
+        amount.textContent = item.amount;
+        const percent = document.createElement("small");
+        percent.textContent = item.percent;
+        row.append(swatch, name, amount, percent);
+        breakdown.append(row);
+      }
+    }
     tooltip.hidden = false;
     const marker = (point.querySelector("[data-tooltip-anchor]") ?? point).getBoundingClientRect();
     const width = tooltip.offsetWidth, height = tooltip.offsetHeight;
     tooltip.style.left = `${Math.max(8, Math.min(document.documentElement.clientWidth - width - 8, marker.left + marker.width / 2 - width / 2))}px`;
-    tooltip.style.top = `${marker.top - height - 10 >= 8 ? marker.top - height - 10 : marker.bottom + 10}px`;
+    const preferredTop = marker.top - height - 10 >= 8 ? marker.top - height - 10 : marker.bottom + 10;
+    tooltip.style.top = `${Math.max(8, Math.min(document.documentElement.clientHeight - height - 8, preferredTop))}px`;
   };
   document.querySelectorAll<SVGGElement>(".metrics-data-point").forEach((point) => {
     point.addEventListener("pointerenter", () => showTooltip(point), { signal: controller.signal });
