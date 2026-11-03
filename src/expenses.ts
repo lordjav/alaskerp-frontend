@@ -1,11 +1,23 @@
 import { api } from "./services/api";
 import type { ExpenseCategory, ExpensePayment, ExpensePreset, Page } from "./models";
+import { expenseCsv } from "./components/expenses-export";
 
 type Shell = (content: string, page: Page) => void;
 type Money = (value: number) => string;
 type Today = () => string;
 const payments: Array<[ExpensePayment, string]> = [["cash", "Efectivo"], ["nequi", "Nequi"], ["bancolombia", "Bancolombia"], ["credit_card", "Tarjeta"], ["other", "Otro"]];
 const paymentName = (value: ExpensePayment) => payments.find(([code]) => code === value)?.[1] ?? value;
+function exportExpensesCsv(items: Awaited<ReturnType<typeof api.expenses>>["items"], from: string, to: string): void {
+  const blob = new Blob([expenseCsv(items, paymentName)], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `gastos_${from}_${to}.csv`;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
 const errorText = (error: unknown) => error instanceof Error ? error.message : "No se pudo completar la operación.";
 const categoryOptions = (categories: ExpenseCategory[]) => categories.map((category) => `<option value="${escapeHtml(category.id)}">${escapeHtml(category.name)}</option>`).join("");
@@ -155,8 +167,9 @@ export async function renderExpenseTransactions(shell: Shell, money: Money, toda
   const month = new Intl.DateTimeFormat("es-CO", { month: "long", timeZone: "UTC" }).format(new Date(`${from}T12:00:00Z`));
   const caption = monthlyRange ? `${month.charAt(0).toUpperCase()}${month.slice(1)}` : `${from} a ${to}`;
   const rows = result.items.map((item) => `<tr><td data-label="Fecha">${escapeHtml(item.expense_date)}</td><td data-label="Responsable">${escapeHtml(item.responsible.username)}</td><td data-label="Concepto">${escapeHtml(item.name)}${item.note ? `<small class="expense-table-note">${escapeHtml(item.note)}</small>` : ""}</td><td data-label="Categoría">${escapeHtml(item.category_name)}</td><td data-label="Medio de pago">${paymentName(item.payment_type)}</td><td data-label="Valor">${money(item.amount)}</td></tr>`).join("");
-  shell(`<div class="expense-heading"><div><h1>Transacciones</h1><p>Consulta las ventas y los gastos desde un mismo lugar.</p></div></div><div class="expense-tabs" role="tablist"><button type="button" role="tab" aria-selected="false" id="transactions-sales">Ventas</button><button type="button" role="tab" aria-selected="true" class="active">Gastos</button></div><div class="panel expense-table-panel"><form class="actions expense-range" id="expense-range-form"><label class="field">Desde<input id="expense-start" type="date" value="${escapeHtml(from)}" required></label><label class="field">Hasta<input id="expense-end" type="date" value="${escapeHtml(to)}" required></label><button class="secondary" type="submit">Consultar</button></form><p class="expense-form-error" id="expense-range-error" role="alert"></p><div class="expense-transaction-summary"><span>${monthlyRange ? "Gastos de este mes" : "Gastos del período"}</span><strong>${money(result.total_amount)}</strong><small>${result.count} registro${result.count === 1 ? "" : "s"} · ${escapeHtml(caption)}</small></div><table class="table"><thead><tr><th>Fecha</th><th>Responsable</th><th>Concepto</th><th>Categoría</th><th>Medio de pago</th><th>Valor</th></tr></thead><tbody>${rows || `<tr><td colspan="6" class="empty">No hay gastos en el rango seleccionado.</td></tr>`}</tbody></table></div>`, "sales");
+  shell(`<div class="expense-heading"><div><h1>Transacciones</h1><p>Consulta las ventas y los gastos desde un mismo lugar.</p></div></div><div class="expense-tabs" role="tablist"><button type="button" role="tab" aria-selected="false" id="transactions-sales">Ventas</button><button type="button" role="tab" aria-selected="true" class="active">Gastos</button></div><div class="panel expense-table-panel"><form class="actions expense-range" id="expense-range-form"><label class="field">Desde<input id="expense-start" type="date" value="${escapeHtml(from)}" required></label><label class="field">Hasta<input id="expense-end" type="date" value="${escapeHtml(to)}" required></label><button class="secondary" type="submit">Consultar</button><button class="outline" type="button" id="export-expenses" ${result.items.length ? "" : "disabled"}>Exportar</button></form><p class="expense-form-error" id="expense-range-error" role="alert"></p><div class="expense-transaction-summary"><span>${monthlyRange ? "Gastos de este mes" : "Gastos del período"}</span><strong>${money(result.total_amount)}</strong><small>${result.count} registro${result.count === 1 ? "" : "s"} · ${escapeHtml(caption)}</small></div><table class="table"><thead><tr><th>Fecha</th><th>Responsable</th><th>Concepto</th><th>Categoría</th><th>Medio de pago</th><th>Valor</th></tr></thead><tbody>${rows || `<tr><td colspan="6" class="empty">No hay gastos en el rango seleccionado.</td></tr>`}</tbody></table></div>`, "sales");
   document.querySelector<HTMLButtonElement>("#transactions-sales")!.onclick = showSales;
+  document.querySelector<HTMLButtonElement>("#export-expenses")!.onclick = () => exportExpensesCsv(result.items, from, to);
   document.querySelector<HTMLFormElement>("#expense-range-form")!.onsubmit = async (event) => {
     event.preventDefault();
     const start = document.querySelector<HTMLInputElement>("#expense-start")!;

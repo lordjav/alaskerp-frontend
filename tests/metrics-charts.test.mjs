@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { monthlyExpenseCategories, renderExpenseCategoryChart, renderHourlySalesChart, renderTreemap, treemapTiles, weeklySeries } from '../src/components/metrics-charts.ts';
+import { chartFlavors, monthlyExpenseCategories, renderExpenseCategoryChart, renderHourlySalesChart, renderTreemap, treemapTiles, weeklySeries } from '../src/components/metrics-charts.ts';
+
+test('flavor treemap omits Otro from labels and percentages', () => {
+  const chart = renderTreemap('Por sabor', chartFlavors({ Fresa: 3, Otro: 2, Chocolate: 1 }), (value) => `${value} bolas`, 'Sabores');
+  assert.doesNotMatch(chart, /Otro/);
+  assert.match(chart, /Fresa: 3 bolas · 75 %/);
+});
 
 test('monthly lines group calendar weeks and stop the current week today', () => {
   const weeks = weeklySeries('2026-10-01', '2026-10-12', {
@@ -51,7 +57,9 @@ test('expense chart keeps six calendar months and stacks amounts by category', (
   assert.deepEqual(months.at(-1).categories, { a: 200, b: 300 });
   const chart = renderExpenseCategoryChart(expenses, '2026-10-12', (value) => `$ ${value}`);
   assert.match(chart, /Gastos por categoría/);
-  assert.match(chart, /Servicios · oct\.: \$ 300/);
+  assert.equal((chart.match(/class="metrics-data-point metrics-expense-bar"/g) ?? []).length, 2);
+  assert.match(chart, /aria-label="octubre de 2026: \$ 500\. Servicios: \$ 300, 60 %; Insumos: \$ 200, 40 %"/);
+  assert.match(chart, /data-breakdown="\[\{&quot;name&quot;:&quot;Servicios&quot;,&quot;amount&quot;:&quot;\$ 300&quot;,&quot;percent&quot;:&quot;60 %&quot;/);
 });
 
 test('hourly chart shows narrow bars from 07 through midnight in calendar order', () => {

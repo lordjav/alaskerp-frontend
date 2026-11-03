@@ -359,7 +359,16 @@ button:disabled:hover, button:disabled:active { transform: none; }
 .metrics-point-popover { position:fixed; z-index:10; display:flex; flex-direction:column; gap:3px; max-width:190px; padding:8px 11px; border-radius:9px; background:#332f25; color:#fff; box-shadow:0 8px 24px #332f2540; pointer-events:none; white-space:nowrap; font-size:12px; }
 .metrics-point-popover span { font-size:13px; font-weight:800; }
 .metrics-point-popover[hidden] { display:none; }
+.metrics-point-popover.has-breakdown { width:max-content; max-width:min(320px,calc(100vw - 16px)); white-space:normal; }
+.metrics-tooltip-breakdown { display:grid; gap:7px; margin-top:7px; padding-top:8px; border-top:1px solid #ffffff45; }
+.metrics-tooltip-breakdown[hidden] { display:none; }
+.metrics-tooltip-row { display:grid; grid-template-columns:10px minmax(0,1fr) auto auto; align-items:baseline; gap:6px; }
+.metrics-tooltip-row i { width:10px; height:10px; align-self:center; border-radius:2px; }
+.metrics-tooltip-row span { overflow-wrap:anywhere; font-size:12px; font-weight:600; }
+.metrics-tooltip-row b { white-space:nowrap; }
+.metrics-tooltip-row small { color:#d8d1c7; white-space:nowrap; }
 .metrics-expense-chart { margin-top:18px; }
+.metrics-expense-bar:focus-visible [data-tooltip-anchor] { stroke:#332f25; stroke-width:2; }
 .metrics-hourly-chart { margin-top:18px; }
 .metrics-hour-point [data-tooltip-anchor] { pointer-events:none; }
 .metrics-hour-point:focus-visible [data-tooltip-anchor] { stroke:#332f25; stroke-width:2; }

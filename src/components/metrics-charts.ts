@@ -5,6 +5,10 @@ type Point = { date: string; value: number };
 export type WeekSeries = { label: string; color: string; points: Array<Point | null>; total: number };
 export type TreemapTile = { name: string; value: number; x: number; y: number; width: number; height: number };
 
+export function chartFlavors(values: Metrics["flavors"]): Metrics["flavors"] {
+  return Object.fromEntries(Object.entries(values).filter(([name]) => name.trim().toLocaleLowerCase("es") !== "otro"));
+}
+
 const DAY = 86_400_000;
 const weekColors = ["#d31770", "#2276bb", "#639a21", "#c57919", "#8154b4", "#168b80"];
 const tileColors = ["#d9efb7", "#fbd5e6", "#d4e8fa", "#f8e4bc", "#e6dbf7", "#cdece7", "#f5d9cc", "#e2e7ba"];
@@ -74,7 +78,7 @@ export function renderWeeklyChart(start: string, end: string, daily: Metrics["da
     const last = Number(days.at(-1)?.date.slice(8) ?? 0);
     return `<span class="metrics-week-key"><i style="background:${week.color}"></i><b>${week.label}</b><small>${first}${first === last ? "" : `–${last}`} · ${money(week.total)}</small></span>`;
   }).join("");
-  return `<section class="panel metrics-main-chart"><div class="metrics-chart-heading"><div><h2>Ventas diarias por semana</h2><p>Cada línea representa una semana del mes; ${currentMonth ? "la semana actual llega hasta hoy" : "se muestra el mes completo"}.</p></div></div>${content}<div class="metrics-week-legend">${legend}</div><div class="metrics-point-popover" id="metrics-point-popover" role="tooltip" hidden><strong></strong><span></span></div></section>`;
+  return `<section class="panel metrics-main-chart"><div class="metrics-chart-heading"><div><h2>Ventas diarias por semana</h2><p>Cada línea representa una semana del mes; ${currentMonth ? "la semana actual llega hasta hoy" : "se muestra el mes completo"}.</p></div></div>${content}<div class="metrics-week-legend">${legend}</div><div class="metrics-point-popover" id="metrics-point-popover" role="tooltip" hidden><strong></strong><span></span><div class="metrics-tooltip-breakdown" hidden></div></div></section>`;
 }
 
 export function renderHourlySalesChart(hourly: Metrics["hourly"], money: Money): string {
@@ -132,6 +136,7 @@ export function renderExpenseCategoryChart(expenses: Expense[], end: string, mon
     const value = index * step, y = top + height * (1 - value / maximum);
     return `<line x1="${left}" y1="${y}" x2="${left + width}" y2="${y}" class="metrics-grid-line"/><text x="${left - 12}" y="${y + 5}" class="metrics-axis-label" text-anchor="end">${compactMoney(value)}</text>`;
   }).join("") : `<line x1="${left}" y1="${top + height}" x2="${left + width}" y2="${top + height}" class="metrics-grid-line"/>`;
+  const percentFormat = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 1 });
   const bars = months.map((month, index) => {
     const center = left + width * (index + 0.5) / 6;
     let bottom = top + height;
@@ -140,10 +145,18 @@ export function renderExpenseCategoryChart(expenses: Expense[], end: string, mon
       if (!value) return "";
       const segmentHeight = height * value / maximum;
       bottom -= segmentHeight;
-      const description = escapeHtml(`${categoryNames[id]} · ${month.label}: ${money(value)}`);
-      return `<rect x="${(center - 43).toFixed(1)}" y="${bottom.toFixed(1)}" width="86" height="${segmentHeight.toFixed(1)}" fill="${colors.get(id)}" aria-label="${description}"><title>${description}</title></rect>`;
+      return `<rect x="${(center - 43).toFixed(1)}" y="${bottom.toFixed(1)}" width="86" height="${segmentHeight.toFixed(1)}" fill="${colors.get(id)}"/>`;
     }).join("");
-    return `${segments}<text x="${center.toFixed(1)}" y="325" class="metrics-axis-label" text-anchor="middle">${escapeHtml(month.label)}</text>`;
+    const details = categoryIds.filter((id) => month.categories[id])
+      .sort((a, b) => month.categories[b] - month.categories[a]).map((id) => ({
+      name: categoryNames[id], amount: money(month.categories[id]),
+      percent: `${percentFormat.format(100 * month.categories[id] / month.total)} %`, color: colors.get(id),
+    }));
+    const label = new Intl.DateTimeFormat("es-CO", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${month.key}-01T12:00:00Z`));
+    const description = `${label}: ${money(month.total)}. ${details.map((item) => `${item.name}: ${item.amount}, ${item.percent}`).join("; ")}`;
+    const barHeight = height * month.total / maximum;
+    const bar = month.total ? `<g class="metrics-data-point metrics-expense-bar" tabindex="0" role="img" aria-label="${escapeHtml(description)}" data-label="${escapeHtml(label)}" data-value="Total: ${escapeHtml(money(month.total))}" data-breakdown="${escapeHtml(JSON.stringify(details))}">${segments}<rect data-tooltip-anchor="true" x="${(center - 43).toFixed(1)}" y="${(top + height - barHeight).toFixed(1)}" width="86" height="${barHeight.toFixed(1)}" fill="transparent"/></g>` : "";
+    return `${bar}<text x="${center.toFixed(1)}" y="325" class="metrics-axis-label" text-anchor="middle">${escapeHtml(month.label)}</text>`;
   }).join("");
   const legend = categoryIds.map((id) => `<span class="metrics-expense-key"><i style="background:${colors.get(id)}"></i>${escapeHtml(categoryNames[id])}</span>`).join("");
   return `<section class="panel metrics-expense-chart"><div class="metrics-chart-heading"><div><h2>Gastos por categoría</h2><p>Últimos 6 meses · valores en COP</p></div></div><div class="metrics-line-scroll"><svg class="metrics-line-svg" viewBox="0 0 1000 345" role="img" aria-label="Gastos mensuales agrupados por categoría">${grid}${bars}</svg></div>${highest ? `<div class="metrics-expense-legend">${legend}</div>` : `<p class="metrics-chart-empty">Aún no hay gastos registrados en estos seis meses.</p>`}</section>`;
