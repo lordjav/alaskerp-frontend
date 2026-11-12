@@ -47,7 +47,7 @@ a { color:inherit; }
 .menu-product h3 { margin:0 0 4px; font-size:19px; line-height:1.2; }
 .menu-product p { margin:0; color:#7a8271; font-size:13px; }
 .menu-product strong { flex:0 0 auto; color:#d7116c; font-size:18px; white-space:nowrap; }
-.menu-flavors { margin-top:36px; padding:38px 40px; display:grid; grid-template-columns:1fr 1fr; gap:30px; align-items:center; border-radius:28px; background:#f1f8e5; }
+.menu-flavors { margin:0 0 55px; padding:38px 40px; display:grid; grid-template-columns:1fr 1fr; gap:30px; align-items:center; border-radius:28px; background:#f1f8e5; scroll-margin-top:24px; }
 .menu-flavors h2 { font-size:37px; }
 .menu-flavor-list { display:flex; flex-wrap:wrap; justify-content:flex-start; gap:8px; }
 .menu-flavor-list span { padding:9px 14px; border:1px solid #d5e6bd; border-radius:999px; background:#fff; color:#436326; font-size:13px; font-weight:700; }

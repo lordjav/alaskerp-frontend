@@ -23,6 +23,8 @@ para otros equipos.
 Abre `http://localhost:5173/`. La plantilla de desarrollo usa `/api` y el proxy de
 Vite para comunicarse con API Gateway sin depender de su lista CORS. El sitio
 publicado sí llama directamente a API Gateway. `.env.local` no se sube a Git.
+El menú público se abre en `http://localhost:5173/menu/` y consulta el catálogo de
+producción mediante `VITE_MENU_API_URL`. En local, `/menu-api` usa su propio proxy.
 En Cognito deben estar permitidas las URL de callback y cierre de sesión
 `http://localhost:5173/`. El puerto se mantiene fijo para no cambiar ese callback.
 Para usar otro backend, cambia `VITE_API_PROXY_TARGET`; debe usar un puerto distinto
@@ -42,6 +44,9 @@ Define estas variables de repositorio en GitHub Actions antes del primer desplie
 
 - `PROD_API_URL`, `PROD_COGNITO_DOMAIN`, `PROD_COGNITO_CLIENT_ID`
 - `DEV_API_URL`, `DEV_COGNITO_DOMAIN`, `DEV_COGNITO_CLIENT_ID`
+
+El menú público de ambos entornos usa `PROD_API_URL` para mostrar los productos,
+sabores y precios vigentes de producción sin iniciar sesión.
 
 El callback OAuth de cada app client Cognito debe ser exactamente la raíz de su entorno: `https://alaskerp.javiermeza.dev/` y `https://lordjav.github.io/alaskerp-frontend/dev/`.
 
