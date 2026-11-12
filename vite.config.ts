@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => {
   } : undefined;
   return {
     base: process.env.VITE_BASE_PATH ?? "/",
+    build: { rollupOptions: { input: { app: "index.html", menu: "menu/index.html" } } },
     server: { host: "localhost", port: 5173, strictPort: true, proxy },
   };
 });
