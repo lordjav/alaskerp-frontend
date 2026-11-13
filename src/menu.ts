@@ -22,7 +22,7 @@ function frame(content: string): void {
   app.innerHTML = `<div class="menu-page" id="inicio">
     <header class="menu-header"><div class="menu-header-inner"><a class="menu-brand" href="#inicio" aria-label="Helados Alaska, ir al inicio"><img src="${import.meta.env.BASE_URL}alaska-logo-white.png" alt="Helados Alaska"></a><span class="menu-header-label">Nuestro menú</span></div></header>
     <main>${content}</main>
-    <footer class="menu-footer"><span>Helados Alaska</span><span>Hechos para disfrutar.</span></footer>
+    <footer class="menu-footer"><div class="menu-footer-main"><span>Helados Alaska</span><span>Hechos para disfrutar.</span></div><small class="menu-developer-credit">Desarrollado por <a href="https://javiermeza.dev" target="_blank" rel="noreferrer">javiermeza.dev</a></small></footer>
   </div>`;
 }
 

@@ -60,7 +60,11 @@ a { color:inherit; }
 .menu-error h1 { margin:10px 0; font-family:Fraunces,Georgia,serif; }
 .menu-error p { color:#666d58; }
 .menu-error button { margin-top:10px; padding:13px 21px; border:0; border-radius:999px; background:#e9167b; color:#fff; font-weight:800; }
-.menu-footer { min-height:100px; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:20px max(34px,calc((100vw - 1112px)/2)); background:#294919; color:#fff; font-size:13px; font-weight:700; }
-.menu-footer span:last-child { color:#c7e7a2; }
+.menu-footer { min-height:100px; display:grid; align-content:center; gap:14px; padding:20px max(34px,calc((100vw - 1112px)/2)); background:#294919; color:#fff; font-size:13px; font-weight:700; }
+.menu-footer-main { display:flex; align-items:center; justify-content:space-between; gap:20px; }
+.menu-footer-main span:last-child { color:#c7e7a2; }
+.menu-developer-credit { color:#c7e7a2; font-size:10px; font-weight:700; text-align:center; }
+.menu-developer-credit a { color:inherit; text-decoration:none; }
+.menu-developer-credit a:hover { text-decoration:underline; }
 @media(max-width:760px) { .menu-header-inner { height:78px; padding:0 20px; }.menu-brand { width:94px; height:70px; }.menu-header-label { font-size:11px; }.menu-hero { border-radius:0 0 45% 4% / 0 0 5% 1%; }.menu-hero-inner { min-height:0; padding:25px 25px 70px; grid-template-columns:1fr; gap:0; }.menu-hero h1 { margin-top:16px; font-size:clamp(58px,13vw,90px); }.menu-hero p { font-size:16px; margin-bottom:25px; }.menu-hero-art { width:min(60vw,270px); margin-top:20px; }.menu-hero-word { font-size:clamp(38px,9vw,56px); }.menu-hero-seal { width:68px; height:68px; font-size:9px; }.menu-content { padding:55px 20px 40px; }.menu-product-list { grid-template-columns:1fr; }.menu-section { padding:25px 0 30px; }.menu-section-heading h2 { font-size:30px; }.menu-flavors { grid-template-columns:1fr; padding:30px 25px; gap:23px; }.menu-takeaway { padding:28px 20px 4px; }.menu-footer { padding:20px; } }
 @media(max-width:400px) { .menu-product { padding:16px; }.menu-product strong { font-size:16px; }.menu-product h3 { font-size:17px; }.menu-section-count { font-size:11px; } }
