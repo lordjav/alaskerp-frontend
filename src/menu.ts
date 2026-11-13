@@ -36,14 +36,20 @@ function render(products: Product[], flavors: Flavor[]): void {
     groups.get(name)!.push(product);
   }
   const names = [...groups.keys()].sort((a, b) => (presentationRank[a] ?? 99) - (presentationRank[b] ?? 99) || a.localeCompare(b, "es"));
-  const nav = names.map((name) => `<a href="#${groupId(name)}">${escapeHtml(name)}</a>`).join("");
-  const sections = names.map((name, index) => {
+  const forTakeaway = (name: string) => /^(tarrina|barril)$/i.test(name);
+  const isWater = (name: string) => name.toLocaleLowerCase("es") === "agua";
+  const regularNames = [...names.filter((name) => !forTakeaway(name) && !isWater(name)), ...names.filter(isWater)];
+  const takeawayNames = names.filter(forTakeaway);
+  const nav = regularNames.map((name) => `<a href="#${groupId(name)}">${escapeHtml(name)}</a>`).join("");
+  const renderSection = (name: string, index: number) => {
     const cards = groups.get(name)!.sort((a, b) => a.price - b.price || a.size.localeCompare(b.size, "es")).map((product) => `<article class="menu-product"><div class="menu-product-copy"><span class="menu-product-number">${String(index + 1).padStart(2, "0")}</span><div><h3>${escapeHtml(product.size)}</h3>${usesFlavors(name) ? `<p>${product.max_flavors} sabor${product.max_flavors === 1 ? "" : "es"} a elegir</p>` : ""}</div></div><strong>${money(product.price)}</strong></article>`).join("");
     return `<section class="menu-section" id="${groupId(name)}"><div class="menu-section-heading"><span class="menu-section-index">${String(index + 1).padStart(2, "0")}</span><h2>${escapeHtml(name)}</h2><span class="menu-section-count">${groups.get(name)!.length} presentaci${groups.get(name)!.length === 1 ? "ón" : "ones"}</span></div><div class="menu-product-list">${cards}</div></section>`;
-  }).join("");
+  };
+  const sections = regularNames.map(renderSection).join("");
+  const takeaway = takeawayNames.length ? `<section class="menu-takeaway" aria-labelledby="menu-takeaway-title"><div class="menu-takeaway-heading"><span class="menu-eyebrow">PARA COMPARTIR O GUARDAR</span><h2 id="menu-takeaway-title">Para llevar...</h2></div>${takeawayNames.map((name, index) => renderSection(name, regularNames.length + index)).join("")}</section>` : "";
   frame(`<section class="menu-hero"><div class="menu-hero-inner"><div class="menu-hero-copy"><span class="menu-eyebrow">HELADOS ALASKA · MENÚ</span><h1>Un momento<br><em>más dulce.</em></h1><p>Elige tu presentación, encuentra tus sabores favoritos y descubre el precio antes de pedir.</p><a class="menu-hero-link" href="#sabores">Ver el menú <span aria-hidden="true">↗</span></a></div><div class="menu-hero-art" aria-hidden="true"><span class="menu-orbit orbit-one"></span><span class="menu-orbit orbit-two"></span><span class="menu-hero-word">Alaska<span>♥</span></span><span class="menu-hero-seal">HECHO<br>CON AMOR</span></div></div></section>
     <div class="menu-content"><section class="menu-flavors" id="sabores"><div><span class="menu-eyebrow">ELIGE TU FAVORITO</span><h2>Sabores para elegir</h2><p>Combínalos según la cantidad de sabores de tu presentación.</p></div><div class="menu-flavor-list">${activeFlavors.length ? activeFlavors.map((flavor) => `<span>${escapeHtml(flavor.name)}</span>`).join("") : `<span>Consulta los sabores disponibles en tienda.</span>`}</div></section>
-    <div class="menu-intro" id="productos"><span class="menu-eyebrow">LO QUE TENEMOS PARA TI</span><h2>Encuentra tu favorito</h2><p>Precios en pesos colombianos. Los productos y sabores disponibles se actualizan desde nuestro catálogo.</p></div>${names.length ? `<nav class="menu-categories" aria-label="Presentaciones">${nav}</nav>${sections}` : `<div class="menu-empty">Todavía no hay productos disponibles.</div>`}<p class="menu-note">La disponibilidad de productos y sabores puede variar en el punto de venta.</p></div>`);
+    <div class="menu-intro" id="productos"><span class="menu-eyebrow">LO QUE TENEMOS PARA TI</span><h2>Encuentra tu favorito</h2><p>Precios en pesos colombianos. Los productos y sabores disponibles se actualizan desde nuestro catálogo.</p></div>${names.length ? `${regularNames.length ? `<nav class="menu-categories" aria-label="Presentaciones">${nav}</nav>` : ""}${sections}${takeaway}` : `<div class="menu-empty">Todavía no hay productos disponibles.</div>`}<p class="menu-note">La disponibilidad de productos y sabores puede variar en el punto de venta.</p></div>`);
 }
 
 function showError(error: unknown): void {

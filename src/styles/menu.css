@@ -47,6 +47,10 @@ a { color:inherit; }
 .menu-product h3 { margin:0 0 4px; font-size:19px; line-height:1.2; }
 .menu-product p { margin:0; color:#7a8271; font-size:13px; }
 .menu-product strong { flex:0 0 auto; color:#d7116c; font-size:18px; white-space:nowrap; }
+.menu-takeaway { margin-top:32px; padding:36px 38px 10px; border-radius:28px; background:#fff0f7; }
+.menu-takeaway-heading { margin-bottom:20px; }
+.menu-takeaway-heading h2 { margin:8px 0 0; font-family:Fraunces,Georgia,serif; font-size:clamp(38px,4vw,52px); letter-spacing:-.05em; }
+.menu-takeaway .menu-section { border-color:#ebd7e2; }
 .menu-flavors { margin:0 0 55px; padding:38px 40px; display:grid; grid-template-columns:1fr 1fr; gap:30px; align-items:center; border-radius:28px; background:#f1f8e5; scroll-margin-top:24px; }
 .menu-flavors h2 { font-size:37px; }
 .menu-flavor-list { display:flex; flex-wrap:wrap; justify-content:flex-start; gap:8px; }
@@ -58,5 +62,5 @@ a { color:inherit; }
 .menu-error button { margin-top:10px; padding:13px 21px; border:0; border-radius:999px; background:#e9167b; color:#fff; font-weight:800; }
 .menu-footer { min-height:100px; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:20px max(34px,calc((100vw - 1112px)/2)); background:#294919; color:#fff; font-size:13px; font-weight:700; }
 .menu-footer span:last-child { color:#c7e7a2; }
-@media(max-width:760px) { .menu-header-inner { height:78px; padding:0 20px; }.menu-brand { width:94px; height:70px; }.menu-header-label { font-size:11px; }.menu-hero { border-radius:0 0 45% 4% / 0 0 5% 1%; }.menu-hero-inner { min-height:0; padding:25px 25px 70px; grid-template-columns:1fr; gap:0; }.menu-hero h1 { margin-top:16px; font-size:clamp(58px,13vw,90px); }.menu-hero p { font-size:16px; margin-bottom:25px; }.menu-hero-art { width:min(60vw,270px); margin-top:20px; }.menu-hero-word { font-size:clamp(38px,9vw,56px); }.menu-hero-seal { width:68px; height:68px; font-size:9px; }.menu-content { padding:55px 20px 40px; }.menu-product-list { grid-template-columns:1fr; }.menu-section { padding:25px 0 30px; }.menu-section-heading h2 { font-size:30px; }.menu-flavors { grid-template-columns:1fr; padding:30px 25px; gap:23px; }.menu-footer { padding:20px; } }
+@media(max-width:760px) { .menu-header-inner { height:78px; padding:0 20px; }.menu-brand { width:94px; height:70px; }.menu-header-label { font-size:11px; }.menu-hero { border-radius:0 0 45% 4% / 0 0 5% 1%; }.menu-hero-inner { min-height:0; padding:25px 25px 70px; grid-template-columns:1fr; gap:0; }.menu-hero h1 { margin-top:16px; font-size:clamp(58px,13vw,90px); }.menu-hero p { font-size:16px; margin-bottom:25px; }.menu-hero-art { width:min(60vw,270px); margin-top:20px; }.menu-hero-word { font-size:clamp(38px,9vw,56px); }.menu-hero-seal { width:68px; height:68px; font-size:9px; }.menu-content { padding:55px 20px 40px; }.menu-product-list { grid-template-columns:1fr; }.menu-section { padding:25px 0 30px; }.menu-section-heading h2 { font-size:30px; }.menu-flavors { grid-template-columns:1fr; padding:30px 25px; gap:23px; }.menu-takeaway { padding:28px 20px 4px; }.menu-footer { padding:20px; } }
 @media(max-width:400px) { .menu-product { padding:16px; }.menu-product strong { font-size:16px; }.menu-product h3 { font-size:17px; }.menu-section-count { font-size:11px; } }
